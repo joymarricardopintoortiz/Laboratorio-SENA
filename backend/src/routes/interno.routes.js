@@ -8,6 +8,7 @@ import cotizacionesRoutes from '../modules/cotizaciones/cotizaciones.routes.js';
 import pagosRoutes from '../modules/pagos/pagos.routes.js';
 import muestrasRoutes from '../modules/muestras/muestras.routes.js';
 import analisisRoutes from '../modules/analisisMuestras/analisisMuestras.routes.js';
+import incidenciasRoutes from '../modules/incidencias/incidencias.routes.js';
 
 const router = Router();
 
@@ -20,5 +21,6 @@ router.use('/cotizaciones', cotizacionesRoutes);
 router.use('/pagos', pagosRoutes);
 router.use('/muestras', muestrasRoutes);
 router.use('/analisis', analisisRoutes);
+router.use('/incidencias', incidenciasRoutes);
 
 export default router;
