@@ -1,0 +1,20 @@
+// Rutas internas /api/interno/* (Fase 1+: exigirán JWT y roles).
+import { Router } from 'express';
+import authRoutes from '../modules/auth/auth.routes.js';
+import clientesRoutes from '../modules/clientes/clientes.routes.js';
+import solicitudesRoutes from '../modules/solicitudes/solicitudes.routes.js';
+import parametrosRoutes from '../modules/parametrosAnalisis/parametrosAnalisis.routes.js';
+import cotizacionesRoutes from '../modules/cotizaciones/cotizaciones.routes.js';
+import pagosRoutes from '../modules/pagos/pagos.routes.js';
+
+const router = Router();
+
+// Auth: login público; perfil requiere JWT.
+router.use('/auth', authRoutes);
+router.use('/clientes', clientesRoutes);
+router.use('/solicitudes', solicitudesRoutes);
+router.use('/parametros-analisis', parametrosRoutes);
+router.use('/cotizaciones', cotizacionesRoutes);
+router.use('/pagos', pagosRoutes);
+
+export default router;

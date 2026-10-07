@@ -1,0 +1,36 @@
+﻿// Modelo de cotizaciones con borrado lógico (RNF-015).
+import mongoose from 'mongoose';
+import { softDeletePlugin } from '../../utils/softDelete.plugin.js';
+
+const itemSchema = new mongoose.Schema(
+  {
+    parametro: { type: mongoose.Schema.Types.ObjectId, ref: 'ParametroAnalisis', required: true },
+    descripcion: { type: String, default: '' },
+    cantidad: { type: Number, required: true, min: 1 },
+    precioUnitario: { type: Number, required: true, min: 0 },
+    subtotal: { type: Number, required: true, min: 0 },
+  },
+  { _id: false }
+);
+
+const cotizacionSchema = new mongoose.Schema(
+  {
+    solicitud: { type: mongoose.Schema.Types.ObjectId, ref: 'Solicitud', required: true },
+    numero: { type: Number, unique: true }, // consecutivo
+    items: { type: [itemSchema], required: true },
+    subtotal: { type: Number, required: true, min: 0 },
+    total: { type: Number, required: true, min: 0 },
+    estado: {
+      type: String,
+      enum: ['borrador', 'enviada', 'envio_fallido', 'aceptada', 'rechazada'],
+      default: 'borrador',
+    },
+    enviadaPorCorreo: { type: Boolean, default: false },
+    errorCorreo: { type: String, default: '' },
+  },
+  { timestamps: true }
+);
+
+cotizacionSchema.plugin(softDeletePlugin);
+
+export const Cotizacion = mongoose.model('Cotizacion', cotizacionSchema);
