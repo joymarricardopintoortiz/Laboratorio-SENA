@@ -11,6 +11,11 @@ import { generarRotuloPDF } from '../../services/pdf.service.js';
 import { registrarEvento, historial } from '../../services/trazabilidad.service.js';
 import { registrarCambio } from '../cambiosFecha/cambiosFecha.service.js';
 import { AnalisisMuestra } from '../analisisMuestras/analisisMuestras.model.js';
+import {
+  notificarCambioEstado,
+  notificarCambioFecha,
+  notificarResultados,
+} from '../notificaciones/notificaciones.service.js';
 
 // Transiciones permitidas de estado.
 const TRANSICIONES = {
@@ -48,6 +53,8 @@ export async function cambiarEstado(id, { estadoNuevo, motivo }, usuario) {
 
   await registrarEvento({ muestraId: muestra._id, tipoEvento: 'cambio_estado', estadoAnterior, estadoNuevo, descripcion: motivo || '', usuarioId: usuario, visibleCliente: true });
   await registrarAuditoria({ entidad: 'muestras', entidadId: String(id), accion: 'cambio_estado', antes, despues: muestra.toObject(), usuario });
+  // RF-107: aviso al cliente sobre el cambio de etapa (no rompe la operación).
+  await notificarCambioEstado({ muestra, estadoAnterior, estadoNuevo });
   return muestra;
 }
 
@@ -112,6 +119,8 @@ export async function cerrar(id, usuario) {
   await muestra.save();
   await registrarEvento({ muestraId: muestra._id, tipoEvento: 'cierre', estadoNuevo: 'cerrada', descripcion: 'Proceso cerrado', usuarioId: usuario, visibleCliente: true });
   await registrarAuditoria({ entidad: 'muestras', entidadId: String(id), accion: 'cerrar', antes, despues: muestra.toObject(), usuario });
+  // RF-109: al validar el cierre, los resultados quedan disponibles para el cliente.
+  await notificarResultados({ muestra });
   return muestra;
 }
 
@@ -130,6 +139,8 @@ export async function cambiarFechaEstimada(id, { fechaNueva, motivo }, usuario) 
   await registrarCambio({ muestraId: muestra._id, fechaAnterior, fechaNueva: new Date(fechaNueva), motivo, usuarioId: usuario });
   await registrarEvento({ muestraId: muestra._id, tipoEvento: 'cambio_fecha', descripcion: `Fecha estimada: ${motivo}`, usuarioId: usuario, visibleCliente: true });
   await registrarAuditoria({ entidad: 'muestras', entidadId: String(id), accion: 'cambio_fecha', antes, despues: muestra.toObject(), usuario });
+  // RF-108: aviso al cliente de la nueva fecha estimada.
+  await notificarCambioFecha({ muestra, fechaAnterior, fechaNueva: muestra.fechaEstimadaEntrega, motivo });
   return muestra;
 }
 

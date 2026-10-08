@@ -6,7 +6,7 @@ const eventoSchema = new mongoose.Schema(
     muestraId: { type: mongoose.Schema.Types.ObjectId, ref: 'Muestra', required: true, index: true },
     tipoEvento: {
       type: String,
-      enum: ['recepcion', 'ingreso', 'cambio_estado', 'observacion', 'correccion', 'inicio', 'cambio_fecha', 'resultado', 'repeticion', 'validacion', 'cierre', 'rotulo', 'ubicacion', 'rechazo'],
+      enum: ['recepcion', 'ingreso', 'cambio_estado', 'observacion', 'correccion', 'inicio', 'cambio_fecha', 'resultado', 'repeticion', 'validacion', 'cierre', 'rotulo', 'ubicacion', 'rechazo', 'notificacion'],
       required: true,
     },
     estadoAnterior: { type: String, default: null },
@@ -19,5 +19,8 @@ const eventoSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Índices para la consulta pública: eventos de una muestra visibles al cliente.
+eventoSchema.index({ muestraId: 1, visibleCliente: 1, fecha: 1 });
 
 export const EventoTrazabilidad = mongoose.model('EventoTrazabilidad', eventoSchema);

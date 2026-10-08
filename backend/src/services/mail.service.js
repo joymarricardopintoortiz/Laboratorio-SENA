@@ -19,6 +19,10 @@ async function obtenerTransporter() {
       port: puerto,
       secure: puerto === 465, // true para 465 (SSL), false para 587 (STARTTLS)
       auth: { user: env.MAIL_USER, pass: env.MAIL_APP_PASSWORD },
+      // Tiempos límite: un correo averiado no debe colgar la operación que lo disparó.
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 20000,
     });
     origenPrueba = false;
     console.log(`📧 Correo: usando SMTP ${env.MAIL_HOST}:${puerto} como ${env.MAIL_USER}`);
@@ -29,6 +33,9 @@ async function obtenerTransporter() {
       port: 587,
       secure: false,
       auth: { user: cuenta.user, pass: cuenta.pass },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 20000,
     });
     origenPrueba = true;
     console.log(`📧 Correo: sin SMTP real, usando cuenta de prueba Ethereal (${cuenta.user})`);
