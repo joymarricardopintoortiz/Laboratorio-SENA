@@ -46,7 +46,8 @@ async function obtenerTransporter() {
 
 // Envía un correo y devuelve info del envío. Si es cuenta de prueba,
 // imprime la URL de vista previa en consola.
-export async function enviarCorreo({ para, asunto, html, texto }) {
+// adjuntos: arreglo opcional de { nombre, contenido(Buffer), tipoMime }.
+export async function enviarCorreo({ para, asunto, html, texto, adjuntos = null }) {
   const t = await obtenerTransporter();
   const info = await t.sendMail({
     from: env.MAIL_FROM || env.MAIL_USER || 'no-reply@laboratorio.local',
@@ -54,6 +55,11 @@ export async function enviarCorreo({ para, asunto, html, texto }) {
     subject: asunto,
     html,
     text: texto,
+    attachments: (adjuntos || []).map((a) => ({
+      filename: a.nombre,
+      content: a.contenido,
+      contentType: a.tipoMime || 'application/octet-stream',
+    })),
   });
 
   if (origenPrueba) {

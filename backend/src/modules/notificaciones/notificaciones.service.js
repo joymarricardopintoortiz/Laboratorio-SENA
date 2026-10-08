@@ -41,7 +41,7 @@ const fechaLarga = (fecha) => (fecha
   : 'no definida');
 
 // El correo explica qué cambió e incluye el codigoSeguimiento. Nada de datos internos.
-function cuerpoCorreo({ asunto, mensaje, codigoSeguimiento, codigo }) {
+function cuerpoCorreo({ asunto, mensaje, codigoSeguimiento, codigo, enlace = null }) {
   const texto = [
     asunto,
     '',
@@ -49,6 +49,7 @@ function cuerpoCorreo({ asunto, mensaje, codigoSeguimiento, codigo }) {
     '',
     `Código de seguimiento: ${codigoSeguimiento || 'no disponible'}`,
     codigo ? `Código de la muestra: ${codigo}` : null,
+    enlace ? `Enlace: ${enlace}` : null,
     '',
     'Consulta el estado de tu muestra con tu código de seguimiento en la consulta pública del laboratorio.',
     'Este es un mensaje automático; no respondas a este correo.',
@@ -58,6 +59,7 @@ function cuerpoCorreo({ asunto, mensaje, codigoSeguimiento, codigo }) {
     `<p>${escapar(asunto)}</p>`,
     `<p style="white-space:pre-line">${escapar(mensaje)}</p>`,
     `<p><strong>Código de seguimiento:</strong> ${escapar(codigoSeguimiento || 'no disponible')}${codigo ? ` &nbsp;|&nbsp; <strong>Código de la muestra:</strong> ${escapar(codigo)}` : ''}</p>`,
+    enlace ? `<p><a href="${escapar(enlace)}">${escapar(enlace)}</a></p>` : '',
     '<hr style="border:none;border-top:1px solid #ddd">',
     '<p style="font-size:12px;color:#666">Consulta el estado de tu muestra con tu código de seguimiento en la consulta pública del laboratorio. Este es un mensaje automático; no respondas a este correo.</p>',
   ].join('');
@@ -85,7 +87,8 @@ async function buscarMuestra(id) {
 }
 
 // Envía (o reintenta) una notificación ya creada. No lanza excepciones.
-export async function enviarNotificacion(notificacion, { muestra = null, cliente = null } = {}) {
+// adjuntos (opcional): PDF del informe. enlace (opcional): URL pública.
+export async function enviarNotificacion(notificacion, { muestra = null, cliente = null, adjuntos = null, enlace = null } = {}) {
   try {
     const muestraDoc = muestra || await buscarMuestra(notificacion.muestraId);
     const clienteDoc = cliente || await cargarCliente(muestraDoc);
@@ -105,8 +108,9 @@ export async function enviarNotificacion(notificacion, { muestra = null, cliente
           mensaje: notificacion.mensaje,
           codigoSeguimiento: muestraDoc?.codigoSeguimiento,
           codigo: muestraDoc?.codigo,
+          enlace,
         });
-        await enviarCorreo({ para: correo, asunto: notificacion.asunto, html, texto });
+        await enviarCorreo({ para: correo, asunto: notificacion.asunto, html, texto, adjuntos });
         notificacion.estado = 'enviada';
         notificacion.fechaEnvio = new Date();
         notificacion.errorUltimoIntento = null;
@@ -137,7 +141,7 @@ export async function enviarNotificacion(notificacion, { muestra = null, cliente
 }
 
 // Crea la notificación y la envía. No lanza excepciones.
-export async function crearNotificacion({ muestra = null, cliente = null, tipo, asunto, mensaje }) {
+export async function crearNotificacion({ muestra = null, cliente = null, tipo, asunto, mensaje, adjuntos = null, enlace = null }) {
   try {
     const notificacion = await Notificacion.create({
       muestraId: muestra?._id || null,
@@ -158,7 +162,7 @@ export async function crearNotificacion({ muestra = null, cliente = null, tipo, 
       usuario: 'sistema',
     });
 
-    return await enviarNotificacion(notificacion, { muestra, cliente });
+    return await enviarNotificacion(notificacion, { muestra, cliente, adjuntos, enlace });
   } catch (error) {
     console.error('❌ No se pudo crear la notificación:', error.message);
     return null;
@@ -216,6 +220,46 @@ export async function notificarResultados({ muestra }) {
     });
   } catch (error) {
     console.error('❌ notificarResultados:', error.message);
+    return null;
+  }
+}
+
+// RF-086: aviso al cliente de que la muestra está en su plazo de conservación.
+export async function notificarConservacion({ muestra, fechaLimite }) {
+  try {
+    if (!muestra) return null;
+    const cliente = await cargarCliente(muestra);
+    return await crearNotificacion({
+      muestra,
+      cliente,
+      tipo: 'conservacion',
+      asunto: `Plazo de conservación de tu muestra ${muestra.codigo || ''}`.trim(),
+      mensaje: `El proceso de "${muestra.nombreMuestra}" fue cerrado.
+La muestra se conservará en el laboratorio hasta el ${fechaLarga(fechaLimite)} (7 días hábiles).
+Después de esa fecha se recomienda retirarla (devolución) o disponer de ella.`,
+    });
+  } catch (error) {
+    console.error('❌ notificarConservacion:', error.message);
+    return null;
+  }
+}
+
+// RF-086: aviso al cliente de la disposición final (devolución o desecho).
+export async function notificarDisposicion({ muestra, tipo, motivo }) {
+  try {
+    if (!muestra) return null;
+    const cliente = await cargarCliente(muestra);
+    const texto = tipo === 'devolucion' ? 'devuelta' : 'desechada';
+    return await crearNotificacion({
+      muestra,
+      cliente,
+      tipo: 'otro',
+      asunto: `Muestra ${texto}: ${muestra.codigo || ''}`.trim(),
+      mensaje: `Tu muestra "${muestra.nombreMuestra}" fue ${texto} por el laboratorio.
+Motivo: ${motivo || 'no indicado'}.`,
+    });
+  } catch (error) {
+    console.error('❌ notificarDisposicion:', error.message);
     return null;
   }
 }

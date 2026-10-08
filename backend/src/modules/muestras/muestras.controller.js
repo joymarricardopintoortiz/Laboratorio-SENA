@@ -3,6 +3,7 @@ import { asyncHandler } from '../../utils/asyncHandler.js';
 import * as service from './muestras.service.js';
 import { AppError } from '../../utils/AppError.js';
 import { historial as historialCambiosFecha } from '../cambiosFecha/cambiosFecha.service.js';
+import { pendientesDisposicion as pendientesDisposicionService } from '../disposiciones/disposiciones.service.js';
 
 const usuarioId = (req) => req.usuario?.email || req.usuario?._id || null;
 
@@ -55,6 +56,12 @@ export const listar = asyncHandler(async (req, res) => {
 
 export const obtener = asyncHandler(async (req, res) => {
   res.json({ ok: true, muestra: await service.obtener(req.params.id) });
+});
+
+// RF-092: muestras cerradas con el plazo de conservación vencido.
+export const pendientesDisposicion = asyncHandler(async (req, res) => {
+  const muestras = await pendientesDisposicionService(usuarioId(req));
+  res.json({ ok: true, cantidad: muestras.length, muestras });
 });
 
 export const actualizar = asyncHandler(async (req, res) => {

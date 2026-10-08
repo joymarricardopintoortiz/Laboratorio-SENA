@@ -14,6 +14,8 @@ const envSchema = z.object({
   MAIL_APP_PASSWORD: z.string().optional().default(''),
   MAIL_FROM: z.string().optional().default(''),
   MAX_FILE_MB: z.coerce.number().int().positive().default(5),
+  // URL pública (frontend) para armar los enlaces de la encuesta y del informe.
+  FRONTEND_URL: z.string().optional().default(''),
   FACTUS_BASE_URL: z.string().optional().default(''),
   FACTUS_CLIENT_ID: z.string().optional().default(''),
   FACTUS_CLIENT_SECRET: z.string().optional().default(''),

@@ -56,28 +56,77 @@ function llaveMuestra(Modelo) {
   return null;
 }
 
-// Disponibilidad del informe: SOLO estado, nunca el contenido ni el PDF (RF-083).
+// Disponibilidad del informe: SOLO estado y fecha, nunca el archivo ni el PDF
+// (RF-083). Se muestra la versión publicada más reciente.
 async function estadoInforme(muestra) {
   const Informe = await cargarModelo('../informes/informes.model.js', 'Informe');
   const llave = Informe && llaveMuestra(Informe);
   if (!llave) return null;
   const valor = llave === 'solicitudId' ? muestra.solicitudId : muestra._id;
-  const informe = await Informe.findOne({ [llave]: valor });
-  if (!informe) return { disponible: false, estado: null };
-  const estado = informe.estado ?? (informe.disponible ? 'disponible' : null);
-  const disponible = informe.disponible === true || ['disponible', 'enviado', 'publicado'].includes(estado);
-  return { disponible: Boolean(disponible), estado };
+  if (!valor) return { disponible: false, estado: null, fecha: null };
+
+  const informes = await Informe.find({ [llave]: valor })
+    .select('estado fechaDisponibilidad version createdAt')
+    .sort({ version: -1, createdAt: -1 })
+    .limit(50)
+    .lean();
+  if (!informes.length) return { disponible: false, estado: null, fecha: null };
+
+  const publicado = informes.find((i) => ['disponible', 'enviado'].includes(i.estado));
+  const elegido = publicado || informes[0];
+  return {
+    disponible: Boolean(publicado),
+    estado: elegido.estado ?? null,
+    fecha: elegido.fechaDisponibilidad || elegido.createdAt || null,
+  };
 }
 
-// Estado de facturación público: solo el estado, y solo si el módulo existe.
+// Estado de facturación público: solo estado, número y fecha.
+// El documento del proveedor, el pago y los internos NUNCA salen por aquí.
 async function estadoFacturacion(muestra) {
   const Factura = await cargarModelo('../facturas/facturas.model.js', 'Factura');
   const llave = Factura && llaveMuestra(Factura);
   if (!llave) return null;
   const valor = llave === 'solicitudId' ? muestra.solicitudId : muestra._id;
-  const factura = await Factura.findOne({ [llave]: valor });
-  if (!factura) return { existe: false, estado: null };
-  return { existe: true, estado: factura.estado ?? null };
+  if (!valor) return { existe: false, estado: null, numero: null, fecha: null };
+
+  const factura = await Factura.findOne({ [llave]: valor })
+    .select('estado numero fechaGeneracion createdAt')
+    .sort({ createdAt: -1 })
+    .lean();
+  if (!factura) return { existe: false, estado: null, numero: null, fecha: null };
+
+  return {
+    existe: true,
+    estado: factura.estado ?? null,
+    numero: factura.numero ?? null,
+    fecha: factura.fechaGeneracion || factura.createdAt || null,
+  };
+}
+
+// Descarga pública del PDF protegida por el mismo codigoSeguimiento (RF-083).
+// Solo informes ya publicados; jamás devuelve borradores ni el JSON con el PDF.
+export async function descargarInformePublico(codigoSeguimiento) {
+  const muestra = await buscarMuestraPorCodigo(codigoSeguimiento);
+  const Informe = await cargarModelo('../informes/informes.model.js', 'Informe');
+  if (!Informe) throw new AppError('El informe aún no está disponible. Intenta más tarde.', 404);
+
+  const informe = await Informe.findOne({
+    muestraId: muestra._id,
+    estado: { $in: ['disponible', 'enviado'] },
+  })
+    .select('+archivo numeroInforme fechaDisponibilidad')
+    .sort({ version: -1, createdAt: -1 });
+
+  if (!informe || !informe.archivo?.length) {
+    throw new AppError('El informe de esta muestra aún no está disponible para descarga', 404);
+  }
+
+  return {
+    archivo: informe.archivo,
+    numeroInforme: informe.numeroInforme,
+    nombreArchivo: `${informe.numeroInforme}.pdf`,
+  };
 }
 
 // RF-077: consulta pública. Proyecta SOLO campos públicos y devuelve los datos

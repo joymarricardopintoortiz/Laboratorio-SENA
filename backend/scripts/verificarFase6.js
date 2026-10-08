@@ -278,6 +278,19 @@ async function main() {
   const okMetodos = respuestas.every((r) => [404, 405].includes(r.status) && r.data?.ok === false);
   registrar('RNF-005: POST/PUT/PATCH/DELETE no permitidos en /api/publico', okMetodos, resumen);
 
+  // Fase 7: el ÚNICO POST nuevo permitido en /api/publico es responder la
+  // encuesta con su token. Con un token inexistente responde 404 (nunca 405);
+  // los demás métodos y rutas siguen bloqueados arriba.
+  const encuestaPost = await api('/publico/encuestas/token-que-no-existe-000', {
+    metodo: 'POST', body: { respuestas: [{ pregunta: '¿Cómo fue el servicio?', calificacion: 5 }] },
+  });
+  registrar('Fase 7: POST /api/publico/encuestas/:token está permitido (404 por token, no 405)',
+    encuestaPost.status === 404 && encuestaPost.data?.ok === false,
+    `status=${encuestaPost.status} | ${encuestaPost.data?.mensaje}`);
+  const encuestaGet = await api('/publico/encuestas/token-que-no-existe-000');
+  registrar('GET /api/publico/encuestas/:token → 404 con mensaje claro', encuestaGet.status === 404,
+    `status=${encuestaGet.status} | ${encuestaGet.data?.mensaje}`);
+
   // ------------------------------------- 6) respuesta del cliente con PDF
   const form = new FormData();
   form.append('mensaje', 'Confirmamos la recepción de la muestra, adjuntamos el acta.');

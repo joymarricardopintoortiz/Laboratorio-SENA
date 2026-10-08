@@ -10,6 +10,10 @@ import muestrasRoutes from '../modules/muestras/muestras.routes.js';
 import analisisRoutes from '../modules/analisisMuestras/analisisMuestras.routes.js';
 import incidenciasRoutes from '../modules/incidencias/incidencias.routes.js';
 import notificacionesRoutes from '../modules/notificaciones/notificaciones.routes.js';
+import disposicionesRoutes from '../modules/disposiciones/disposiciones.routes.js';
+import informesRoutes from '../modules/informes/informes.routes.js';
+import encuestasRoutes from '../modules/encuestas/encuestas.routes.js';
+import facturasRoutes from '../modules/facturas/facturas.routes.js';
 
 const router = Router();
 
@@ -24,5 +28,10 @@ router.use('/muestras', muestrasRoutes);
 router.use('/analisis', analisisRoutes);
 router.use('/incidencias', incidenciasRoutes);
 router.use('/notificaciones', notificacionesRoutes);
+// Fase 7: disposiciones, informes, encuestas y facturas.
+router.use('/disposiciones', disposicionesRoutes);
+router.use('/informes', informesRoutes);
+router.use('/encuestas', encuestasRoutes);
+router.use('/facturas', facturasRoutes);
 
 export default router;

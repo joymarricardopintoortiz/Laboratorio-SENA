@@ -3,17 +3,26 @@
 // El resto de métodos queda bloqueado (RNF-005) por el middleware final.
 import { Router } from 'express';
 import * as controller from './publico.controller.js';
+import * as encuestasController from '../encuestas/encuestas.controller.js';
 import { validate } from '../../middlewares/validate.js';
 import { subirArchivos } from '../../middlewares/upload.js';
 import { AppError } from '../../utils/AppError.js';
 import { responderIncidenciaSchema } from './publico.schema.js';
+import { responderEncuestaSchema } from '../encuestas/encuestas.schema.js';
 
 const router = Router();
 
 // 1) Consulta pública de seguimiento (solo lectura).
 router.get('/seguimiento/:codigoSeguimiento', controller.seguimiento);
 
-// 2) Respuesta del cliente a una incidencia que espera respuesta.
+// 2) Descarga del informe: protegida por el mismo codigoSeguimiento (RF-083).
+router.get('/seguimiento/:codigoSeguimiento/informe', controller.descargarInforme);
+
+// 3) Encuesta de satisfacción (RF-100 a RF-102): único token, respuesta única.
+router.get('/encuestas/:token', encuestasController.ver);
+router.post('/encuestas/:token', validate(responderEncuestaSchema), encuestasController.responder);
+
+// 4) Respuesta del cliente a una incidencia que espera respuesta.
 //    Multer primero (llena req.body con los campos de texto) y luego zod.
 router.post(
   '/seguimiento/:codigoSeguimiento/incidencias/:incidenciaId/respuesta',

@@ -31,6 +31,8 @@ const muestraSchema = new mongoose.Schema(
     fechaEstimadaEntrega: { type: Date, default: null },
     fechaCierre: { type: Date, default: null },
     fechaLimiteConservacion: { type: Date, default: null },
+    // RF-091: true cuando venció el plazo de conservación sin disposición.
+    pendienteDisposicion: { type: Boolean, default: false },
     ultimoEvento: {
       tipo: { type: String, default: null },
       fecha: { type: Date, default: null },

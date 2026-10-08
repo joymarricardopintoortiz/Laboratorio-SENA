@@ -9,6 +9,9 @@ import { registrarAuditoria } from '../../middlewares/audit.js';
 import { siguiente } from '../secuencias/secuencias.service.js';
 import { generarRotuloPDF } from '../../services/pdf.service.js';
 import { registrarEvento, historial } from '../../services/trazabilidad.service.js';
+import { DIAS_CONSERVACION } from '../../config/constants.js';
+import { sumarDiasHabiles } from '../../utils/diasHabiles.js';
+import { notificarConservacion } from '../notificaciones/notificaciones.service.js';
 import { registrarCambio } from '../cambiosFecha/cambiosFecha.service.js';
 import { AnalisisMuestra } from '../analisisMuestras/analisisMuestras.model.js';
 import {
@@ -116,11 +119,17 @@ export async function cerrar(id, usuario) {
   const antes = muestra.toObject();
   muestra.estado = 'cerrada';
   muestra.fechaCierre = new Date();
+  // RF-086: al cerrar se calcula el plazo de conservación (7 días hábiles,
+  // excluyendo sábados, domingos y festivos de constants.js).
+  const fechaLimite = sumarDiasHabiles(new Date(), DIAS_CONSERVACION);
+  muestra.fechaLimiteConservacion = fechaLimite;
   await muestra.save();
   await registrarEvento({ muestraId: muestra._id, tipoEvento: 'cierre', estadoNuevo: 'cerrada', descripcion: 'Proceso cerrado', usuarioId: usuario, visibleCliente: true });
   await registrarAuditoria({ entidad: 'muestras', entidadId: String(id), accion: 'cerrar', antes, despues: muestra.toObject(), usuario });
   // RF-109: al validar el cierre, los resultados quedan disponibles para el cliente.
   await notificarResultados({ muestra });
+  // RF-086: el cliente queda avisado de cuánto tiempo conservamos la muestra.
+  await notificarConservacion({ muestra, fechaLimite });
   return muestra;
 }
 

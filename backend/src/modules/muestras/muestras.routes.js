@@ -42,6 +42,8 @@ const router = Router();
 router.use(auth);
 
 router.get('/', requireRole('admin', 'encargado', 'usuario'), controller.listar);
+// RF-092: debe ir ANTES de '/:id' para no ser capturado como un id.
+router.get('/pendientes-disposicion', requireRole('admin', 'encargado', 'usuario'), controller.pendientesDisposicion);
 router.get('/:id', requireRole('admin', 'encargado', 'usuario'), controller.obtener);
 router.post('/', requireRole('admin', 'encargado'), validate(recibirMuestraSchema), controller.recibir);
 router.put('/:id', requireRole('admin', 'encargado'), validate(actualizarMuestraSchema), controller.actualizar);
