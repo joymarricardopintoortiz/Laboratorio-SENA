@@ -1,0 +1,24 @@
+# Backend del laboratorio empaquetado en Docker.
+#
+# Uso:
+#   docker compose up -d --build      construye la imagen y levanta el servicio
+#   docker compose ps                 ver el estado (healthy = Atlas conectado)
+#   docker compose logs -f backend    ver los logs del contenedor
+#   docker compose down               detener y quitar el contenedor
+#
+# Los secretos salen de .env (gitignored); la imagen no los contiene.
+# Puerto 3200 en la máquina host para no chocar con el servidor local (3000)
+# ni con las pruebas de humo (3100).
+services:
+  backend:
+    build: .
+    image: laboratorio-backend:1.0.0
+    container_name: laboratorio-backend
+    ports:
+      - "3200:3000"
+    env_file:
+      - .env
+    environment:
+      PORT: 3000
+      NODE_ENV: production
+    restart: unless-stopped

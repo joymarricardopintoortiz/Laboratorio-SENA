@@ -1,0 +1,24 @@
+# Nada de esto entra en la imagen ni en el contexto de compilación:
+
+# Dependencias locales (la imagen hace su propio npm ci)
+node_modules
+npm-debug.log
+
+# Secretos: jamás dentro de la imagen
+.env
+.env.*
+!.env.example
+
+# Documentación, pruebas y respaldos (se corren desde la máquina host)
+docs
+tests
+README.md
+backups
+
+# Docker
+Dockerfile
+docker-compose.yml
+
+# Git
+.git
+.gitignore
