@@ -13,7 +13,9 @@
 //      recepción de muestra -> inicio -> resultados -> cierre -> informe ->
 //      factura simulada -> consulta pública -> encuesta.
 //   3. Comprueba reglas de negocio y de seguridad (401 sin token, 405 en la
-//      superficie pública, errores sin stack trace, consulta pública < 2 s).
+//      superficie pública, errores sin stack trace, consulta pública < 2 s,
+//      gestión de usuarios solo admin, auditorías solo admin y que el motivo
+//      interno de un cambio de fecha nunca sale en la API pública).
 //   4. LIMPIA los datos de prueba al terminar (borrado lógico), aunque falle.
 //
 // Los datos de prueba se marcan con "PRUEBA HUMO" para poder encontrarlos.
@@ -182,6 +184,74 @@ async function flujo(c, token) {
     `${errorJson.status}: ${datosError.mensaje}`
   );
   exigir(sinStack(datosError), 'El error no filtra stack trace', JSON.stringify(datosError).slice(0, 160));
+
+  // --- gestión de usuarios (solo admin) ---
+  const emailEncargado = `encargado.humo.${Date.now()}@example.com`;
+  const usuarioCreado = await api('/api/interno/usuarios', {
+    metodo: 'POST',
+    token: c.token,
+    body: {
+      nombre: `${MARCA} encargado`,
+      email: emailEncargado,
+      password: 'Segura123',
+      rol: 'encargado',
+      permisos: { editar: true, eliminar: false },
+    },
+    esperado: 201,
+  });
+  c.usuarioEncargadoId = usuarioCreado.data.usuario?._id;
+  exigir(!!c.usuarioEncargadoId, 'Usuario encargado creado por el admin');
+  exigir(
+    usuarioCreado.data.usuario?.password === undefined,
+    'La respuesta de crear usuario nunca incluye el hash del password'
+  );
+
+  const passwordCorta = await api('/api/interno/usuarios', {
+    metodo: 'POST',
+    token: c.token,
+    body: { nombre: 'Corto', email: `corto.humo.${Date.now()}@example.com`, password: '1234567', rol: 'usuario' },
+  });
+  exigir(passwordCorta.status === 400, 'Contraseña menor a 8 caracteres → 400', passwordCorta.data.mensaje);
+
+  const loginEncargado = await api('/api/interno/auth/login', {
+    metodo: 'POST',
+    body: { email: emailEncargado, password: 'Segura123' },
+    esperado: 200,
+  });
+  c.tokenEncargado = loginEncargado.data.token;
+  exigir(
+    loginEncargado.data.usuario?.rol === 'encargado',
+    'Login con el encargado recién creado'
+  );
+
+  // Regla: la gestión de usuarios es exclusiva del admin.
+  const creacionNoAdmin = await api('/api/interno/usuarios', {
+    metodo: 'POST',
+    token: c.tokenEncargado,
+    body: { nombre: 'No Debe', email: `nodebe.humo.${Date.now()}@example.com`, password: 'Segura123', rol: 'usuario' },
+  });
+  exigir(
+    creacionNoAdmin.status === 403,
+    'El encargado NO puede crear usuarios → 403',
+    creacionNoAdmin.data.mensaje
+  );
+
+  const listadoNoAdmin = await api('/api/interno/usuarios', { token: c.tokenEncargado });
+  exigir(listadoNoAdmin.status === 403, 'El encargado NO puede listar usuarios → 403', listadoNoAdmin.data.mensaje);
+
+  // --- auditorías (solo admin, solo lectura) ---
+  const auditorias = await api('/api/interno/auditorias?limite=5', { token: c.token, esperado: 200 });
+  exigir(
+    Array.isArray(auditorias.data.auditorias) && auditorias.data.paginacion?.total >= 1,
+    'GET /api/interno/auditorias (admin) con paginación',
+    `total: ${auditorias.data.paginacion?.total}`
+  );
+  const auditoriasNoAdmin = await api('/api/interno/auditorias', { token: c.tokenEncargado });
+  exigir(
+    auditoriasNoAdmin.status === 403,
+    'El encargado NO puede ver auditorías → 403',
+    auditoriasNoAdmin.data.mensaje
+  );
 
   // --- parámetro de análisis ---
   const parametro = await api('/api/interno/parametros-analisis', {
@@ -409,6 +479,24 @@ async function flujo(c, token) {
     String(cierre.data.muestra.fechaLimiteConservacion).slice(0, 10)
   );
 
+  // --- cambio de fecha con motivo interno y motivo público ---
+  const MOTIVO_INTERNO = `${MARCA} MOTIVO INTERNO NO PUBLICO`;
+  c.motivoInterno = MOTIVO_INTERNO;
+  const cambioFecha = await api(`/api/interno/muestras/${c.muestraId}/fecha-estimada`, {
+    metodo: 'PATCH',
+    token: c.token,
+    body: {
+      fechaNueva: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+      motivo: MOTIVO_INTERNO,
+      motivoPublico: 'Nueva fecha por mantenimiento del equipo',
+    },
+    esperado: 200,
+  });
+  exigir(
+    !!cambioFecha.data.muestra?.fechaEstimadaEntrega,
+    'Cambio de fecha con motivo interno y motivo público'
+  );
+
   // --- informe ---
   const informe = await api('/api/interno/informes/generar', {
     metodo: 'POST',
@@ -459,6 +547,23 @@ async function flujo(c, token) {
     publica.data.seguimiento?.estado === 'cerrada',
     'La consulta pública devuelve el estado actual',
     publica.data.seguimiento?.estado
+  );
+
+  // Motivo del cambio de fecha: solo sale el motivo público, nunca el interno.
+  const cambiosPublicos = publica.data.seguimiento?.cambiosFecha || [];
+  exigir(cambiosPublicos.length >= 1, 'La consulta pública incluye el cambio de fecha');
+  exigir(
+    cambiosPublicos[0]?.motivoPublico === 'Nueva fecha por mantenimiento del equipo',
+    'La consulta pública muestra el motivoPublico',
+    cambiosPublicos[0]?.motivoPublico
+  );
+  exigir(
+    !('motivo' in (cambiosPublicos[0] || {})),
+    'La consulta pública NUNCA incluye el campo "motivo" (interno)'
+  );
+  exigir(
+    !JSON.stringify(publica.data).includes(c.motivoInterno),
+    'El motivo interno no aparece en ninguna parte de la respuesta pública'
   );
 
   const publicaInvalida = await api('/api/publico/seguimiento/00000000000000000000000000000000');
@@ -538,6 +643,7 @@ async function limpiar(c, token) {
   await borrarApi(c.solicitudId && `/api/interno/solicitudes/${c.solicitudId}`, 'solicitud');
   await borrarApi(c.clienteId && `/api/interno/clientes/${c.clienteId}`, 'cliente');
   await borrarApi(c.parametroId && `/api/interno/parametros-analisis/${c.parametroId}`, 'parámetro');
+  await borrarApi(c.usuarioEncargadoId && `/api/interno/usuarios/${c.usuarioEncargadoId}`, 'usuario encargado');
 
   try {
     await conectarDB();

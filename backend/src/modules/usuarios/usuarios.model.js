@@ -10,6 +10,9 @@ const usuarioSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, required: true, select: false },
     rol: { type: String, enum: ROLES, required: true },
+    // Cuenta activa: una cuenta desactivada no puede iniciar sesión (los
+    // documentos antiguos sin el campo se consideran activos).
+    activo: { type: Boolean, default: true },
     permisos: {
       editar: { type: Boolean, default: false },
       eliminar: { type: Boolean, default: false },

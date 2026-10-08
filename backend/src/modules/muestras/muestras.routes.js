@@ -26,7 +26,10 @@ const observacionSchema = z.object({
 
 const fechaSchema = z.object({
   fechaNueva: z.string().min(1, 'La nueva fecha es obligatoria'),
+  // Motivo interno (auditoría): nunca sale en la API pública.
   motivo: z.string().min(1, 'El motivo es obligatorio'),
+  // Motivo visible para el cliente en la consulta pública (opcional).
+  motivoPublico: z.string().trim().max(500, 'El motivo público no puede superar los 500 caracteres').optional(),
 });
 
 const correccionSchema = z.object({

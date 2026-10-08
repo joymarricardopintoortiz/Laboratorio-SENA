@@ -36,7 +36,9 @@ Arquitectura: **ruta → controller → service → model** (los controllers nun
 | 19 | [Encuestas](#19-encuestas) | 2 |
 | 20 | [Facturas](#20-facturas) | 7 |
 | 21 | [API pública](#21-api-pública) | 5 |
-| 22 | [Verificación de conteo](#22-verificación-de-conteo) | 88 + 1 |
+| 22 | [Usuarios](#22-usuarios) | 6 |
+| 23 | [Auditorías](#23-auditorías) | 1 |
+| 24 | [Verificación de conteo](#24-verificación-de-conteo) | 95 + 1 |
 
 ---
 
@@ -125,7 +127,7 @@ Todos los errores (incluidos 404 y 405) se devuelven en JSON con este formato:
 | **405** | Cualquier método distinto de `GET` en `/api/publico` que no sea uno de los dos `POST` permitidos. |
 | **409** | `POST /api/publico/encuestas/:token` cuando la encuesta ya fue respondida. |
 | **413** | El PDF generado en un informe supera `MAX_FILE_MB`. |
-| **429** | Rate limit de `/api/publico` (30 consultas/min por IP). |
+| **429** | Rate limit de `/api/publico`: **30 consultas/min** por IP (GET) y **10 publicaciones cada 15 min** por IP (los dos POST permitidos). |
 | **502** | Fallo del proveedor externo (Factus sandbox) o del envío de correo en facturas/informes. |
 | **500** | Error interno no previsto. |
 
@@ -1027,7 +1029,7 @@ Errores: **400** `"Transición no permitida: en_proceso → cerrada"` · **400**
 
 ### PATCH `/api/interno/muestras/:id/fecha-estimada` → 200
 
-**Body `fechaSchema`:** `fechaNueva` (string ≥1, **obligatoria**) · `motivo` (string ≥1, **obligatorio**).
+**Body `fechaSchema`:** `fechaNueva` (string ≥1, **obligatoria**) · `motivo` (string ≥1, **obligatorio**; motivo **interno**, solo auditoría) · `motivoPublico` (string ≤500, opcional; es lo único que verá el cliente en la API pública).
 
 ```json
 {
@@ -1049,12 +1051,15 @@ Errores: **400** `"Transición no permitida: en_proceso → cerrada"` · **400**
       "fechaAnterior": "2026-10-13T00:00:00.000Z",
       "fechaNueva": "2026-10-16T00:00:00.000Z",
       "motivo": "Falla en el equipo de titulación",
+      "motivoPublico": "Mantenimiento del equipo",
       "usuarioId": "laura@laboratorio.com",
       "fechaCambio": "2026-10-09T10:15:00.000Z"
     }
   ]
 }
 ```
+
+> El historial **interno** sí incluye `motivo`; la [API pública](#21-api-pública) solo muestra `motivoPublico`.
 
 ---
 
@@ -1826,8 +1831,10 @@ Errores: **400** `"Identificador de solicitud no válido"` / `"Identificador de 
 
 ### Rate limit (RF-084 / RNF-013)
 
-- **30 consultas por minuto por IP** en `/api/publico` (`windowMs: 60 000`, `limit: 30`).
-- Aplica **solo a `GET`** (`skip: req.method === 'POST'`): los dos `POST` permitidos no consumen cuota.
+Dos límites **independientes**, ambos por IP:
+
+- **Consultas (`GET`): 30 por minuto** (`windowMs: 60 000`, `limit: 30`, `skip: req.method === 'POST'`).
+- **Publicaciones (`POST`): 10 cada 15 minutos** (`windowMs: 15 × 60 000`, `limit: 10`, `skip: req.method !== 'POST'`). Cubre la respuesta a una incidencia y la respuesta a la encuesta; no consume la cuota de consultas ni viceversa.
 - Encabezados `RateLimit` (draft-7), sin `X-RateLimit` antiguo.
 - Al superarlo:
 
@@ -1838,6 +1845,8 @@ HTTP 429
   "mensaje": "Demasiadas consultas desde esta dirección IP. Intenta de nuevo en unos minutos."
 }
 ```
+
+En los `POST` el mensaje es `"Demasiadas publicaciones desde esta dirección IP. Intenta de nuevo en unos minutos."`.
 
 ### 405 de la superficie pública (RNF-005)
 
@@ -1873,7 +1882,7 @@ Usa el **`codigoSeguimiento`** aleatorio (nunca el `codigo` `0042-2026`).
       { "fecha": "2026-10-08T17:50:00.000Z", "hora": "17:50:00", "tipo": "cambio_estado", "descripcion": "", "estado": "en_analisis" }
     ],
     "cambiosFecha": [
-      { "fechaAnterior": "2026-10-13T00:00:00.000Z", "fechaNueva": "2026-10-16T00:00:00.000Z", "motivo": "Falla en el equipo de titulación", "fechaCambio": "2026-10-09T10:15:00.000Z" }
+      { "fechaAnterior": "2026-10-13T00:00:00.000Z", "fechaNueva": "2026-10-16T00:00:00.000Z", "motivoPublico": "Falla en el equipo de titulación", "fechaCambio": "2026-10-09T10:15:00.000Z" }
     ],
     "incidencias": [
       {
@@ -1897,7 +1906,7 @@ Usa el **`codigoSeguimiento`** aleatorio (nunca el `codigo` `0042-2026`).
 }
 ```
 
-**Seguridad (RNF-004):** lista blanca de campos — jamás salen `_id` internos, `usuarioId`, `observacionesInternas`, auditorías, ubicación física ni datos de otros clientes. Solo eventos con `visibleCliente: true`.
+**Seguridad (RNF-004):** lista blanca de campos — jamás salen `_id` internos, `usuarioId`, `observacionesInternas`, auditorías, ubicación física ni datos de otros clientes. Solo eventos con `visibleCliente: true`. En `cambiosFecha` **solo** sale `motivoPublico`: el `motivo` interno del cambio de fecha **nunca** se expone (si no hay motivo público, el campo viene como cadena vacía `""`).
 
 **Errores:** **404** `"No se encontró ninguna muestra con ese código de seguimiento. Verifica el código e inténtalo de nuevo."` — mismo mensaje para código inexistente, muestra borrada lógicamente y `id` inválido (no se puede sondear la BD). **429** por rate limit.
 
@@ -2008,17 +2017,136 @@ Errores: **409** `"Esta encuesta ya fue respondida. Gracias por tu participació
 
 > Al registrar la respuesta del cliente, la incidencia pasa a `estado: "en_revision"`.
 
-Errores: **404** (mismo mensaje genérico) si el código no existe, el `incidenciaId` no es válido o la incidencia no pertenece a esa muestra · **404** `"La incidencia no está disponible para el cliente"` (no es `visibleCliente`) · **400** `"La incidencia no está esperando respuesta del cliente"` · **400** `"Datos inválidos"` (mensaje < 3 o > 2000) · **400** por tipo/tamaño/cantidad de archivos · **429** no aplica (los `POST` están exentos del rate limit).
+Errores: **404** (mismo mensaje genérico) si el código no existe, el `incidenciaId` no es válido o la incidencia no pertenece a esa muestra · **404** `"La incidencia no está disponible para el cliente"` (no es `visibleCliente`) · **400** `"La incidencia no está esperando respuesta del cliente"` · **400** `"Datos inválidos"` (mensaje < 3 o > 2000) · **400** por tipo/tamaño/cantidad de archivos · **429** si se superan los **10 POST cada 15 minutos** por IP (límite propio de publicaciones).
 
 ---
 
-## 22. Verificación de conteo
+## 22. Usuarios
 
-Conteo de definiciones `router.<método>(` por archivo de rutas (los archivos `usuarios`, `secuencias`, `auditorias`, `eventosTrazabilidad` y `cambiosFecha` solo contienen un comentario: **0** rutas):
+Gestión de los usuarios del sistema interno. **Exclusiva del rol `admin`**: cada ruta aplica `requireRole('admin')`; cualquier otro rol recibe **403** `"No tienes permisos para esta acción"`.
+
+| Método | Ruta | Rol requerido | Validación zod | Descripción |
+|--------|------|---------------|----------------|-------------|
+| GET | `/api/interno/usuarios` | admin | — | Listado (sin `password`, más recientes primero). |
+| GET | `/api/interno/usuarios/:id` | admin | — | Detalle de un usuario (sin `password`). |
+| POST | `/api/interno/usuarios` | admin | `crearUsuarioSchema` | Crea un usuario interno. |
+| PUT | `/api/interno/usuarios/:id` | admin | `actualizarUsuarioSchema` | Actualiza rol y/o permisos. |
+| PATCH | `/api/interno/usuarios/:id/estado` | admin | `estadoUsuarioSchema` | Activa o desactiva la cuenta. |
+| DELETE | `/api/interno/usuarios/:id` | admin | — | Borrado **lógico**. |
+
+**Body POST `crearUsuarioSchema`:**
+
+| Campo | Tipo | Obligatorio |
+|-------|------|-------------|
+| `nombre` | string (1–120) | **Sí** |
+| `email` | string (correo, **único**) | **Sí** |
+| `password` | string (**mínimo 8** caracteres) | **Sí** |
+| `rol` | `admin \| encargado \| usuario` | **Sí** |
+| `permisos.editar` | boolean | No (default `false`) |
+| `permisos.eliminar` | boolean | No (default `false`) |
+
+**Body PUT `actualizarUsuarioSchema`:** `rol` (enum) y/o `permisos` `{ editar, eliminar }`; al menos uno de los dos (si no → 400 `"Datos inválidos"`).
+
+**Body PATCH `/:id/estado`:** `{ "activo": true }` (activar) o `{ "activo": false }` (desactivar; la cuenta desactivada ya **no puede iniciar sesión** → 401 `"Credenciales inválidas"`).
+
+**POST 201:**
+
+```json
+{
+  "ok": true,
+  "mensaje": "Usuario creado",
+  "usuario": {
+    "_id": "66d0a1b2c3d4e5f607182a80",
+    "nombre": "Laura Encargada",
+    "email": "laura@laboratorio.com",
+    "rol": "encargado",
+    "activo": true,
+    "permisos": { "editar": true, "eliminar": false },
+    "eliminado": false,
+    "createdAt": "2026-10-08T15:40:00.000Z",
+    "updatedAt": "2026-10-08T15:40:00.000Z"
+  }
+}
+```
+
+- El `password` **jamás** aparece en ninguna respuesta: el campo es `select: false` y además se elimina de la lista blanca antes de responder. El hash se hace con bcrypt en el `pre('save')`.
+
+**GET 200 (listado):** `{ "ok": true, "usuarios": [ { "_id": "...", "nombre": "...", "email": "...", "rol": "...", "activo": true, "permisos": { ... } } ] }`
+**GET 200 (uno):** `{ "ok": true, "usuario": { ... } }`
+**PUT 200:** `{ "ok": true, "mensaje": "Usuario actualizado", "usuario": { ... } }`
+**PATCH `/:id/estado` 200:** `{ "ok": true, "mensaje": "Usuario desactivado (ya no puede iniciar sesión)", "usuario": { ... } }`
+**DELETE 200:** `{ "ok": true, "mensaje": "Usuario eliminado (borrado lógico)" }`
+
+**Reglas de autoprotección del admin** (aplican comparando el `:id` con el usuario del token):
+
+| Acción sobre uno mismo | Respuesta |
+|---|---|
+| `PUT /:id` cambiando el rol propio | **400** `"No puedes modificar tu propio rol; pide a otro administrador que lo haga"` |
+| `PATCH /:id/estado` con `activo: false` | **400** `"No puedes desactivar tu propia cuenta de administrador"` |
+| `DELETE /:id` | **400** `"No puedes eliminar tu propia cuenta de administrador"` |
+
+Otros errores: **400** `"Ya existe un usuario con ese email"` (o `"...(aunque esté eliminado); usa otro correo"`) · **400** `"Datos inválidos"` con `detalles` (contraseña < 8, rol fuera del enum, `PUT` sin `rol` ni `permisos`) · **400** `"Identificador de usuario no válido"` · **404** `"Usuario no encontrado"`.
+
+**Auditoría:** cada `crear`, `actualizar`, `activar`, `desactivar` y `eliminar_logico` registra antes/después en la colección `auditorias` (`entidad: "usuarios"`), con el email del administrador responsable.
+
+---
+
+## 23. Auditorías
+
+Consulta de la colección `auditorias` (**append-only**): **solo lectura** y **solo `admin`** (`requireRole('admin')`). No existe ninguna ruta de escritura y el modelo bloquea `findOneAndUpdate` y `deleteOne`.
+
+| Método | Ruta | Rol requerido | Validación zod | Descripción |
+|--------|------|---------------|----------------|-------------|
+| GET | `/api/interno/auditorias` | admin | `listarAuditoriasSchema` (dentro del controller, sobre `query`) | Listado paginado con filtros. |
+
+**Query (todas opcionales):**
+
+| Filtro | Significado |
+|---|---|
+| `coleccion` | Filtra por el campo `entidad` del registro (por ejemplo `muestras`, `clientes`, `usuarios`). |
+| `documentoId` | Filtra por el campo `entidadId` (id del documento afectado). |
+| `usuarioId` | Filtra por el campo `usuario` (email o id de quien hizo el cambio). |
+| `desde` / `hasta` | Rango de fechas (`createdAt`); se aceptan fechas ISO. `desde` debe ser ≤ `hasta`. |
+| `pagina` | Página (entero ≥ 1, default `1`). |
+| `limite` | Tamaño de página (entero 1–100, default `20`). |
+
+Ejemplo: `GET /api/interno/auditorias?coleccion=muestras&usuarioId=laura@laboratorio.com&desde=2026-10-01&hasta=2026-10-31&pagina=1&limite=20`
+
+**GET 200:**
+
+```json
+{
+  "ok": true,
+  "auditorias": [
+    {
+      "_id": "66e0a1b2c3d4e5f607182a90",
+      "entidad": "usuarios",
+      "entidadId": "66d0a1b2c3d4e5f607182a80",
+      "accion": "crear",
+      "antes": null,
+      "despues": { "nombre": "Laura Encargada", "email": "laura@laboratorio.com", "rol": "encargado", "activo": true },
+      "usuario": "admin@sena.edu.co",
+      "ip": "::ffff:127.0.0.1",
+      "createdAt": "2026-10-08T15:40:00.000Z"
+    }
+  ],
+  "paginacion": { "pagina": 1, "limite": 20, "total": 395, "paginas": 20 }
+}
+```
+
+- Orden: `createdAt` descendente (lo más reciente primero).
+- Errores: **403** sin rol `admin` · **400** `"Datos inválidos"` con `detalles` (`pagina`/`limite` fuera de rango, fechas inválidas o `desde > hasta`).
+
+---
+
+## 24. Verificación de conteo
+
+Conteo de definiciones `router.<método>(` por archivo de rutas (los archivos `secuencias`, `eventosTrazabilidad` y `cambiosFecha` solo contienen un comentario: **0** rutas):
 
 | Archivo | Rutas |
 |---------|-------|
 | `modules/auth/auth.routes.js` | 3 |
+| `modules/usuarios/usuarios.routes.js` | 6 |
 | `modules/clientes/clientes.routes.js` | 5 |
 | `modules/solicitudes/solicitudes.routes.js` | 5 |
 | `modules/parametrosAnalisis/parametrosAnalisis.routes.js` | 5 |
@@ -2032,12 +2160,13 @@ Conteo de definiciones `router.<método>(` por archivo de rutas (los archivos `u
 | `modules/informes/informes.routes.js` | 6 |
 | `modules/encuestas/encuestas.routes.js` | 2 |
 | `modules/facturas/facturas.routes.js` | 7 |
+| `modules/auditorias/auditorias.routes.js` | 1 |
 | `modules/publico/publico.routes.js` | 5 |
-| **Total** | **88** |
+| **Total** | **95** |
 
-Documentados en este archivo: **88** (uno por cada `router.<método>` definido, sin contar el middleware `router.use` final del **405** de la superficie pública) **+ 1** endpoint de salud (`app.get('/api/health')` en `src/app.js`, no es `router.<método>`).
+Documentados en este archivo: **95** (uno por cada `router.<método>` definido, sin contar el middleware `router.use` final del **405** de la superficie pública) **+ 1** endpoint de salud (`app.get('/api/health')` en `src/app.js`, no es `router.<método>`).
 
-Suma por secciones: 1 (salud) + 3 + 5 + 5 + 5 + 6 + 3 + 20 + 4 + 11 + 3 + 3 + 6 + 2 + 7 + 5 = **89** (88 de módulos + salud).
+Suma por secciones: 1 (salud) + 3 + 6 + 5 + 5 + 5 + 6 + 3 + 20 + 4 + 11 + 3 + 3 + 6 + 2 + 7 + 1 + 5 = **96** (95 de módulos + salud).
 
 ### Notas / puntos ambiguos
 
@@ -2047,4 +2176,6 @@ Suma por secciones: 1 (salud) + 3 + 5 + 5 + 5 + 6 + 3 + 20 + 4 + 11 + 3 + 3 + 6 
 4. **`POST /api/interno/incidencias/:id/respuestas`** tampoco pasa por zod: `mensaje` y `tipoUsuario` se leen directo del `multipart` (el límite real de 3–2000 caracteres solo lo impone el endpoint público).
 5. `GET /api/interno/auth/login` no existe: el login es **POST**. `GET/PUT /api/interno/auth/perfil` no exigen rol, solo JWT.
 6. `GET /api/interno/muestras/:id/rotulo/descargar` y `GET /api/interno/informes/:id/descargar` devuelven **binario**, no JSON.
-7. La superficie pública **no** tiene `POST` de encuesta dentro del rate limit: solo los dos `POST` (respuesta a incidencia y respuesta a encuesta) están exentos; los `GET` sí consumen los 30/min.
+7. La superficie pública tiene **dos** rate limits independientes por IP: los `GET` consumen los **30/min de consultas** y los dos `POST` permitidos (respuesta a incidencia y respuesta a encuesta) consumen su límite propio de **10 cada 15 minutos**; ninguno consume la cuota del otro.
+8. **`GET /api/interno/auditorias`** valida su query con zod **dentro del controller** (mismo patrón que notificaciones/disposiciones/informes/facturas), porque Express 5 expone `req.query` como solo lectura. Los filtros `coleccion`, `documentoId` y `usuarioId` se mapean a los campos `entidad`, `entidadId` y `usuario` del registro de auditoría.
+9. La gestión de usuarios (`/api/interno/usuarios`) es la única superficie con `requireRole('admin')` en **todas** sus rutas; el campo `activo: false` impide iniciar sesión y usar tokens ya emitidos.

@@ -15,6 +15,8 @@ import disposicionesRoutes from '../modules/disposiciones/disposiciones.routes.j
 import informesRoutes from '../modules/informes/informes.routes.js';
 import encuestasRoutes from '../modules/encuestas/encuestas.routes.js';
 import facturasRoutes from '../modules/facturas/facturas.routes.js';
+import usuariosRoutes from '../modules/usuarios/usuarios.routes.js';
+import auditoriasRoutes from '../modules/auditorias/auditorias.routes.js';
 
 const router = Router();
 
@@ -43,5 +45,8 @@ router.use('/disposiciones', disposicionesRoutes);
 router.use('/informes', informesRoutes);
 router.use('/encuestas', encuestasRoutes);
 router.use('/facturas', facturasRoutes);
+// Gestión de usuarios y consulta de auditorías: exclusivas del rol admin.
+router.use('/usuarios', usuariosRoutes);
+router.use('/auditorias', auditoriasRoutes);
 
 export default router;

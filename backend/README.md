@@ -37,9 +37,7 @@ cd backend
 npm install
 
 # 3. Crear el archivo de configuración local
-cp .env.example .env
-# Windows:
-#   copy .env.example .env
+copy .env.example .env
 
 # 4. Editar .env con tus valores reales (URI de MongoDB, JWT_SECRET, correo, etc.)
 
@@ -76,8 +74,9 @@ Todas viven en `.env` (copiado de `.env.example`) y se validan con zod en `src/c
 |---|---|---|
 | `PORT` | Puerto del servidor HTTP (por defecto `3000`) | No (por defecto `3000`) |
 | `MONGODB_URI` | Cadena de conexión a MongoDB (Atlas o local) | **Sí** |
-| `JWT_SECRET` | Secreto para firmar los tokens JWT (mínimo 10 caracteres, largo y aleatorio) | **Sí** |
+| `JWT_SECRET` | Secreto para firmar los tokens JWT (**mínimo 32 caracteres**, largo y aleatorio) | **Sí** |
 | `JWT_EXPIRES_IN` | Vigencia del token (por defecto `8h`) | No (por defecto `8h`) |
+| `TRUST_PROXY` | Saltos de proxy inverso que Express confía para leer la IP real (`1` en Render/Heroku/nginx; vacío = desactivado). Controla `app.set('trust proxy', ...)` y por tanto el rate limit por IP | No |
 | `MAIL_HOST` | Servidor SMTP (por defecto `smtp.gmail.com`) | No* |
 | `MAIL_PORT` | Puerto SMTP (por defecto `587`; `465` usa conexión segura) | No (por defecto `587`) |
 | `MAIL_USER` | Correo de origen | No* |
@@ -109,7 +108,7 @@ Definidos en `package.json`:
 | `npm run backup` | Exporta **todas** las colecciones a JSON (EJSON ligero) en `backups/AAAA-MM-DD_HHmm/` con un `resumen.json` de conteos; omite los Buffer de PDF/adjuntos y registra cuántos bytes dejó fuera (RNF-008): `node scripts/backup.js` |
 | `npm run restore -- <carpeta>` | Restaura un respaldo: `node scripts/restore.js backups/AAAA-MM-DD_HHmm`. Solo inserta o reemplaza por `_id` (nunca borra), pide confirmación `SI` y, si hay choques, `SOBRESCRIBIR`; `--sin-confirmacion` para uso no interactivo |
 | `npm run indexes` | Revisa los índices de las 19 colecciones: elimina duplicados, crea los faltantes y reporta (30 índices exigidos): `node scripts/revisarIndices.js` (`-- --solo` = solo lectura) |
-| `npm run security` | Revisión automatizada de seguridad: auth en `/api/interno`, superficie pública, borrado lógico, middlewares globales y ausencia de stack traces/credenciales (33 comprobaciones): `node scripts/revisarSeguridad.js` |
+| `npm run security` | Revisión automatizada de seguridad: auth en `/api/interno`, superficie pública, borrado lógico, middlewares globales y ausencia de stack traces/credenciales (35 comprobaciones): `node scripts/revisarSeguridad.js` |
 
 Scripts auxiliares (se ejecutan con `node`):
 
@@ -136,7 +135,7 @@ backend/
 │   └── smoke.test.js          # prueba de humo del flujo completo (npm test)
 ├── docs/
 │   ├── PLAN_BACKEND_OPENCODE.md   # plan de fases del backend
-│   └── api.md                     # documentación de todos los endpoints (89 rutas)
+│   └── api.md                     # documentación de todos los endpoints (96 rutas)
 ├── scripts/
 │   ├── seed.js                # admin inicial + catálogo de parámetros de análisis
 │   ├── backup.js              # exportación JSON de todas las colecciones (npm run backup)
@@ -175,7 +174,7 @@ backend/
     │   └── trazabilidad.service.js# crea eventosTrazabilidad y actualiza el estado
     ├── modules/               # un módulo por colección (o grupo de colecciones)
     │   ├── auth/                      # login y perfil propio
-    │   ├── usuarios/
+    │   ├── usuarios/                  # gestión de usuarios (solo admin)
     │   ├── clientes/
     │   ├── solicitudes/
     │   ├── cotizaciones/
@@ -192,7 +191,7 @@ backend/
     │   ├── encuestas/
     │   ├── facturas/
     │   ├── notificaciones/
-    │   ├── auditorias/                # append-only
+    │   ├── auditorias/                # append-only; consulta paginada solo admin
     │   └── publico/                   # consulta por código, solo lectura (sin modelo propio)
     │   # Cada módulo: *.model.js, *.service.js, *.controller.js, *.routes.js, *.schema.js
     └── routes/
@@ -242,7 +241,7 @@ Reglas tomadas de `AGENTS.md`; no se incumplen:
 4. **Recepción de muestra.** Al recibir la muestra se le asigna su `codigo` consecutivo-año y su `codigoSeguimiento` (distintos), se verifica físicamente, se avisa si la cantidad es menor a 300 (advertencia, no bloqueo) y se **acepta** (pasa a `ingresada`) o se **rechaza** con motivo obligatorio (`rechazada`). Se imprimen el rótulo en PDF y se ubica en el inventario. *Lo hace: admin o encargado.*
 5. **Análisis.** Se seleccionan los parámetros de análisis y, si corresponde, el inicio queda **bloqueado hasta confirmar el pago**. El estado avanza `en_proceso` → `en_analisis`. *Lo hace: admin o encargado.*
 6. **Resultados.** Se registran resultados por parámetro en `analisisMuestras`, con validación, repetición (con motivo) y corrección auditada; estado `resultados_validados`. Cada cambio deja evento de trazabilidad y registro en auditoría. *Lo hace: admin o encargado.*
-7. **Cierre.** Se cierra el análisis (`cerrada`) y se calcula la fecha estimada; los cambios de fecha quedan en `cambiosFecha` (anterior, nueva, motivo, usuario). *Lo hace: admin o encargado.*
+7. **Cierre.** Se cierra el análisis (`cerrada`) y se calcula la fecha estimada; los cambios de fecha quedan en `cambiosFecha` (anterior, nueva, motivo interno, motivo público y usuario). Lo único que ve el cliente en la API pública es el **motivo público**; el motivo interno jamás sale. *Lo hace: admin o encargado.*
 8. **Informe.** Se genera el informe en **PDF** dentro de la base de datos, se marca disponible y se envía por correo. *Lo hace: admin o encargado; el cliente lo descarga en `/api/publico/seguimiento/:codigo/informe`.*
 9. **Factura.** Se genera con **Factus en sandbox** (o en modo simulado si no hay credenciales), con historial de estados y consulta pública limitada; jamás se envía a la DIAN. *Lo hace: admin o encargado.*
 10. **Consulta pública.** El cliente entra a `/api/publico/seguimiento/:codigoSeguimiento` (sin login) y ve estado, eventos visibles (`visibleCliente=true`), demoras/nueva fecha, disponibilidad del informe y facturación pública; también puede responder una incidencia con adjuntos. Máximo 30 consultas por minuto por IP. *Lo hace: cliente público.*
@@ -286,8 +285,9 @@ npm test          # prueba de humo del flujo completo (Fase 8)
 
 cliente → solicitud → cotización → aceptación → pago simulado → recepción bloqueada sin pago → pago confirmado → ingreso de la muestra → código y códigoSeguimiento → parámetros → inicio/validación de análisis → resultados → cierre (7 días hábiles) → informe → informe disponible → factura simulada → consulta pública (`< 2 s`, sin fugas de campos internos) → encuesta y respuesta única.
 
-- Los datos de prueba llevan la marca `PRUEBA HUMO <timestamp>` y **se borran al terminar**, incluso si el flujo falla a mitad (DELETE de la API + marcado lógico de informes, encuestas, notificaciones, facturas, pagos y cotizaciones).
-- Sale con código `0` si las 40 comprobaciones pasan y `1` en caso contrario.
+- Los datos de prueba llevan la marca `PRUEBA HUMO <timestamp>` y **se borran al terminar**, incluso si el flujo falla a mitad (DELETE de la API + marcado lógico de informes, encuestas, notificaciones, facturas, pagos, cotizaciones y del usuario encargado creado en la prueba).
+- Además del flujo, cubre las reglas nuevas: creación de un usuario **encargado** por el admin (sin exponer el hash), login con ese encargado y verificación de que **no** puede crear ni listar usuarios (**403**), auditorías accesibles solo para admin, y que en la consulta pública el cambio de fecha muestra **solo `motivoPublico`** (el motivo interno no aparece en ninguna parte de la respuesta).
+- Sale con código `0` si las comprobaciones pasan y `1` en caso contrario.
 - Verificaciones puntuales de fases anteriores (servidor arriba): `node scripts/verificarFase6.js`, `node scripts/verificarFase7.js`, `node scripts/probarCorreo.js`. Si quedaron datos huérfanos: `node scripts/limpiarPruebasFase6.js`.
 - Revisar índices: `npm run indexes` · Revisar seguridad: `npm run security`.
 - Ambos scripts de fase aceptan `BASE` (por ejemplo `BASE=http://localhost:3001 node scripts/verificarFase7.js`).
@@ -298,14 +298,16 @@ cliente → solicitud → cotización → aceptación → pago simulado → rece
 - **Autorización** por rol (`requireRole`) y por permiso (`requirePermiso('editar'|'eliminar')`); `admin` siempre puede.
 - **helmet** en todas las respuestas (`src/app.js`).
 - **cors** restringido a `FRONTEND_URL` (si no está definido se deshabilita el CORS).
-- **Rate limit**: general de 600 peticiones / 15 min por IP sobre `/api`, 20 intentos / 15 min en el login (fuerza bruta) y 30 consultas / min en `/api/publico/**`, siempre con respuesta `429` en JSON.
+- **Rate limit**: general de 600 peticiones / 15 min por IP sobre `/api`, 20 intentos / 15 min en el login (fuerza bruta), 30 consultas / min en `/api/publico/**` y, además, un límite **propio de los POST públicos**: 10 publicaciones / 15 min por IP (respuesta a incidencias y encuestas), siempre con respuesta `429` en JSON.
+- **Proxy inverso**: si el servidor va detrás de un proxy (Render, Heroku, nginx), define `TRUST_PROXY=1` en `.env` para que Express lea la IP real y el rate limit por IP siga funcionando; sin esa variable no se confía en ningún proxy.
+- **Gestión de usuarios y auditorías**: `/api/interno/usuarios` (crear, listar, ver, actualizar rol/permisos, activar/desactivar y borrado lógico) y `/api/interno/auditorias` (consulta paginada con filtros) son **exclusivas del rol admin**; un administrador no puede desactivarse, eliminarse ni quitarse el rol, y el hash del password nunca se devuelve.
 - **API pública**: solo `GET`/`POST` (cualquier otro método responde `405`) y sin operaciones de borrado.
 - **Límite de carga**: `express.json({ limit: '10mb' })` y multer con `MAX_FILE_MB` (PDF/JPG/PNG, máximo 3 archivos).
 - **Sin credenciales en el código**: todo en `.env`, que está en `.gitignore`; `.env.example` solo lleva valores de ejemplo.
 - **Errores sin fugas**: respuestas JSON con mensaje en español y nunca stack traces (`errorHandler.js`).
 - **Borrado lógico + auditoría**: nada se borra físicamente y toda modificación queda registrada (`auditorias`, append-only).
 - **Contraseñas** hasheadas con bcrypt; la API pública jamás expone observaciones internas ni campos sensibles.
-- **Verificación repetible**: `npm run security` ejecuta 33 comprobaciones automáticas sobre estas reglas y sale con código distinto de `0` si algo falla.
+- **Verificación repetible**: `npm run security` ejecuta 35 comprobaciones automáticas sobre estas reglas y sale con código distinto de `0` si algo falla.
 
 ## 12. Documentación relacionada
 

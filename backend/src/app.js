@@ -12,6 +12,15 @@ import { errorHandler } from './middlewares/errorHandler.js';
 
 const app = express();
 
+// Proxy inverso (Render, Heroku, nginx...): solo se confía si TRUST_PROXY está
+// definido en .env. Sin esto, detrás de un proxy todas las IPs se ven iguales y
+// el rate limit por IP deja de servir. '1' = un salto; también admite 'true'
+// (equivalente a 1) o 'loopback'.
+if (env.TRUST_PROXY) {
+  const saltos = env.TRUST_PROXY === 'true' ? 1 : Number(env.TRUST_PROXY);
+  app.set('trust proxy', Number.isNaN(saltos) ? env.TRUST_PROXY : saltos);
+}
+
 app.use(helmet());
 
 // CORS: solo las URLs del front configuradas en FRONTEND_URL (se pueden poner

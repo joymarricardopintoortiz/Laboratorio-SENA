@@ -24,7 +24,7 @@ export const auth = asyncHandler(async (req, res, next) => {
   }
 
   const usuario = await Usuario.findById(payload.id);
-  if (!usuario || usuario.eliminado) {
+  if (!usuario || usuario.eliminado || usuario.activo === false) {
     throw new AppError('El usuario del token ya no existe o está inactivo', 401);
   }
 

@@ -134,7 +134,9 @@ export async function cerrar(id, usuario) {
 }
 
 // Cambia la fecha estimada de entrega: exige motivo y guarda historial.
-export async function cambiarFechaEstimada(id, { fechaNueva, motivo }, usuario) {
+// `motivo` es interno; `motivoPublico` (opcional) es lo único que verá el
+// cliente en /api/publico/seguimiento.
+export async function cambiarFechaEstimada(id, { fechaNueva, motivo, motivoPublico }, usuario) {
   const muestra = await Muestra.findById(id);
   if (!muestra) throw new AppError('Muestra no encontrada', 404);
   if (!motivo?.trim()) throw new AppError('El motivo del cambio es obligatorio', 400);
@@ -145,11 +147,12 @@ export async function cambiarFechaEstimada(id, { fechaNueva, motivo }, usuario) 
   muestra.fechaEstimadaEntrega = new Date(fechaNueva);
   await muestra.save();
 
-  await registrarCambio({ muestraId: muestra._id, fechaAnterior, fechaNueva: new Date(fechaNueva), motivo, usuarioId: usuario });
-  await registrarEvento({ muestraId: muestra._id, tipoEvento: 'cambio_fecha', descripcion: `Fecha estimada: ${motivo}`, usuarioId: usuario, visibleCliente: true });
+  await registrarCambio({ muestraId: muestra._id, fechaAnterior, fechaNueva: new Date(fechaNueva), motivo, motivoPublico: motivoPublico || '', usuarioId: usuario });
+  // El evento es visible para el cliente: describe el motivo PÚBLICO, nunca el interno.
+  await registrarEvento({ muestraId: muestra._id, tipoEvento: 'cambio_fecha', descripcion: motivoPublico?.trim() ? `Fecha estimada: ${motivoPublico}` : 'Fecha estimada actualizada', usuarioId: usuario, visibleCliente: true });
   await registrarAuditoria({ entidad: 'muestras', entidadId: String(id), accion: 'cambio_fecha', antes, despues: muestra.toObject(), usuario });
-  // RF-108: aviso al cliente de la nueva fecha estimada.
-  await notificarCambioFecha({ muestra, fechaAnterior, fechaNueva: muestra.fechaEstimadaEntrega, motivo });
+  // RF-108: aviso al cliente de la nueva fecha estimada (usa el motivo público).
+  await notificarCambioFecha({ muestra, fechaAnterior, fechaNueva: muestra.fechaEstimadaEntrega, motivoPublico: motivoPublico || '' });
   return muestra;
 }
 

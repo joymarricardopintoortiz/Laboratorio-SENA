@@ -5,8 +5,9 @@ import { AppError } from '../../utils/AppError.js';
 import { Usuario } from '../usuarios/usuarios.model.js';
 
 export async function login({ email, password }) {
+  // Una cuenta desactivada responde igual que una inexistente (evita sondear correos).
   const usuario = await Usuario.findOne({ email }).select('+password');
-  if (!usuario || usuario.eliminado) {
+  if (!usuario || usuario.eliminado || usuario.activo === false) {
     throw new AppError('Credenciales inválidas', 401);
   }
   const ok = await usuario.compararPassword(password);

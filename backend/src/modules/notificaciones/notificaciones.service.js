@@ -190,7 +190,9 @@ export async function notificarCambioEstado({ muestra, estadoAnterior, estadoNue
   }
 }
 
-export async function notificarCambioFecha({ muestra, fechaAnterior, fechaNueva, motivo }) {
+// El correo va al cliente: usa solo el motivo PÚBLICO (el motivo interno del
+// cambio de fecha jamás se comunica al exterior).
+export async function notificarCambioFecha({ muestra, fechaAnterior, fechaNueva, motivoPublico = '' }) {
   try {
     if (!muestra) return null;
     const cliente = await cargarCliente(muestra);
@@ -199,7 +201,7 @@ export async function notificarCambioFecha({ muestra, fechaAnterior, fechaNueva,
       cliente,
       tipo: 'cambio_fecha',
       asunto: `Nueva fecha estimada para tu muestra ${muestra.codigo || ''}`.trim(),
-      mensaje: `La fecha estimada de entrega de "${muestra.nombreMuestra}" cambió de ${fechaLarga(fechaAnterior)} a ${fechaLarga(fechaNueva)}.\nMotivo: ${motivo || 'no indicado'}.`,
+      mensaje: `La fecha estimada de entrega de "${muestra.nombreMuestra}" cambió de ${fechaLarga(fechaAnterior)} a ${fechaLarga(fechaNueva)}.\nMotivo: ${motivoPublico?.trim() || 'no indicado'}.`,
     });
   } catch (error) {
     console.error('❌ notificarCambioFecha:', error.message);

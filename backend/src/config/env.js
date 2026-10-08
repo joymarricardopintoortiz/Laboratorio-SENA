@@ -6,7 +6,11 @@ import { z } from 'zod';
 const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
   MONGODB_URI: z.string().min(1, 'MONGODB_URI es obligatoria'),
-  JWT_SECRET: z.string().min(10, 'JWT_SECRET debe ser largo y aleatorio'),
+  // Mínimo 32 caracteres: un secreto corto es adivinable y compromete todos los tokens.
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET debe tener al menos 32 caracteres (largo y aleatorio)'),
+  // Saltos de proxy que Express debe confiar para leer la IP real (req.ip).
+  // Vacío = desactivado. Ejemplos: '1' (Render/Heroku/nginx), 'loopback'.
+  TRUST_PROXY: z.string().optional().default(''),
   JWT_EXPIRES_IN: z.string().default('8h'),
   MAIL_HOST: z.string().optional().default(''),
   MAIL_PORT: z.coerce.number().int().positive().default(587),

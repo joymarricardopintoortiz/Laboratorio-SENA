@@ -142,7 +142,7 @@ export async function consultarSeguimiento(codigo) {
       .sort({ fecha: 1 })
       .lean(),
     CambioFecha.find({ muestraId: muestra._id })
-      .select('fechaAnterior fechaNueva motivo fechaCambio')
+      .select('fechaAnterior fechaNueva motivoPublico fechaCambio')
       .sort({ fechaCambio: 1 })
       .lean(),
     Incidencia.find({ muestraId: muestra._id, visibleCliente: true })
@@ -168,11 +168,12 @@ export async function consultarSeguimiento(codigo) {
       descripcion: e.descripcion || '',
       estado: e.estadoNuevo || e.estadoAnterior || null,
     })),
-    // Demoras y nuevas fechas visibles para el cliente.
+    // Demoras y nuevas fechas visibles para el cliente: SOLO motivoPublico.
+    // El motivo interno (campo `motivo`) jamás sale por la API pública.
     cambiosFecha: cambios.map((c) => ({
       fechaAnterior: c.fechaAnterior,
       fechaNueva: c.fechaNueva,
-      motivo: c.motivo || '',
+      motivoPublico: c.motivoPublico || '',
       fechaCambio: c.fechaCambio,
     })),
     // Incidencias visibles: nunca observacionesInternas ni usuarios internos.

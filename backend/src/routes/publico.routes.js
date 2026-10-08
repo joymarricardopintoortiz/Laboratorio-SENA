@@ -23,7 +23,28 @@ const limiteConsultas = rateLimit({
   },
 });
 
+// Límite PROPIO de los POST de la superficie pública (respuesta a incidencia y
+// respuesta a la encuesta): máximo 10 cada 15 minutos por IP. Es independiente
+// del de consultas: quien consulta muchas veces no consume la cuota de
+// publicación y viceversa.
+const limitePublicaciones = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  limit: 10,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  // Solo los POST consumen esta cuota; las consultas (GET) no.
+  skip: (req) => req.method !== 'POST',
+  handler: (req, res) => {
+    res.status(429).json({
+      ok: false,
+      mensaje:
+        'Demasiadas publicaciones desde esta dirección IP. Intenta de nuevo en unos minutos.',
+    });
+  },
+});
+
 router.use(limiteConsultas);
+router.use(limitePublicaciones);
 router.use(publicoRoutes);
 
 export default router;
