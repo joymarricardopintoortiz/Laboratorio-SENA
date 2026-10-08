@@ -66,6 +66,32 @@ curl http://localhost:3000/api/health
 - Si el admin ya existe, **no lo duplica**.
 - También siembra un catálogo inicial de parámetros de análisis (pH, turbidez, coliformes, nitratos, DBO5).
 
+### Ejecutar con Docker
+
+El backend se puede empaquetar en una imagen reproducible (Node 22 Alpine) sin instalar nada más que Docker:
+
+```bash
+# 1. Construir la imagen y levantar el contenedor (puerto local 3200 → contenedor 3000)
+docker compose up -d --build
+
+# 2. Comprobar el estado (healthy = conectado a Atlas)
+docker compose ps
+curl http://localhost:3200/api/health
+
+# 3. Logs, detener y reconstruir
+docker compose logs -f backend
+docker compose down
+```
+
+- **Los secretos no entran en la imagen**: el contenedor lee `.env` en tiempo de ejecución (`env_file`), y `.dockerignore` excluye `.env`, `node_modules/`, `docs/`, `tests/` y `backups/`.
+- El `HEALTHCHECK` del `Dockerfile` solo marca el contenedor como `healthy` si `/api/health` responde con `"baseDatos": "conectada"`.
+- Las pruebas se corren desde la máquina host contra el contenedor:
+  ```bash
+  BASE=http://localhost:3200 npm test               # humo (53) contra el contenedor
+  npm run test:persistencia                         # persistencia (usa :3200 si está levantado)
+  ```
+- Sin Compose también sirve: `docker build -t laboratorio-backend . ` y `docker run -d -p 3200:3000 --env-file .env laboratorio-backend`.
+
 ## 4. Variables de entorno
 
 Todas viven en `.env` (copiado de `.env.example`) y se validan con zod en `src/config/env.js`; si falta algo obligatorio, el proceso falla antes de arrancar y lista el problema en consola.
@@ -104,7 +130,8 @@ Definidos en `package.json`:
 | `npm run dev` | Arranca el servidor en modo observación con `node --watch src/server.js` (reinicia automáticamente al guardar cambios; no usa nodemon) |
 | `npm start` | Arranca el servidor en modo normal: `node src/server.js` |
 | `npm run seed` | Siembra el admin inicial y el catálogo de parámetros de análisis: `node scripts/seed.js` |
-| `npm test` | **Prueba de humo del flujo completo** (Fase 8): `node tests/smoke.test.js`; arranca su propio servidor en el puerto 3100 si no hay uno, recorre cliente → solicitud → cotización → aceptación → pago → recepción → análisis → resultados → cierre → informe → factura → consulta pública → encuesta y limpia sus datos al terminar (sale con código 1 si algo falla) |
+| `npm test` | **Prueba de humo del flujo completo** (Fase 8): `node tests/smoke.test.js`; arranca su propio servidor en el puerto 3100 si no hay uno, recorre cliente → solicitud → cotización → aceptación → pago → recepción → análisis → resultados → cierre → informe → factura → consulta pública → encuesta y limpia sus datos al terminar (sale con código 1 si algo falla). Acepta `BASE=http://localhost:3200 npm test` para correrla contra el contenedor Docker |
+| `npm run test:persistencia` | **Prueba de persistencia**: `node tests/persistencia.test.js`; ejecuta un flujo por API y **lee los documentos directo de MongoDB para imprimirlos en pantalla ANTES → DESPUÉS** (hash bcrypt, campo activo, borrado lógico, secuencia, motivos, auditorías e índices); usa el contenedor de :3200 si está levantado, si no uno propio en 3100; limpia sus datos al terminar |
 | `npm run backup` | Exporta **todas** las colecciones a JSON (EJSON ligero) en `backups/AAAA-MM-DD_HHmm/` con un `resumen.json` de conteos; omite los Buffer de PDF/adjuntos y registra cuántos bytes dejó fuera (RNF-008): `node scripts/backup.js` |
 | `npm run restore -- <carpeta>` | Restaura un respaldo: `node scripts/restore.js backups/AAAA-MM-DD_HHmm`. Solo inserta o reemplaza por `_id` (nunca borra), pide confirmación `SI` y, si hay choques, `SOBRESCRIBIR`; `--sin-confirmacion` para uso no interactivo |
 | `npm run indexes` | Revisa los índices de las 19 colecciones: elimina duplicados, crea los faltantes y reporta (30 índices exigidos): `node scripts/revisarIndices.js` (`-- --solo` = solo lectura) |
@@ -128,11 +155,15 @@ backend/
 ├── .env.example               # plantilla de variables SIN credenciales reales
 ├── .env                       # variables reales (en .gitignore, nunca se sube)
 ├── .gitignore                 # node_modules/, .env, *.log, coverage/, tests/coverage/
+├── Dockerfile                 # imagen de producción (Node 22 Alpine, npm ci --omit=dev, healthcheck)
+├── .dockerignore              # fuera de la imagen: .env, node_modules, docs, tests, backups
+├── docker-compose.yml         # servicio backend en http://localhost:3200 (env_file: .env)
 ├── package.json               # scripts y dependencias (ES modules)
 ├── package-lock.json
 ├── backups/                   # respaldos JSON: backups/AAAA-MM-DD_HHmm/ (los crea npm run backup; está en .gitignore)
 ├── tests/
-│   └── smoke.test.js          # prueba de humo del flujo completo (npm test)
+│   ├── smoke.test.js          # prueba de humo del flujo completo (npm test)
+│   └── persistencia.test.js   # cambios ANTES/DESPUÉS leídos de la base (npm run test:persistencia)
 ├── docs/
 │   ├── PLAN_BACKEND_OPENCODE.md   # plan de fases del backend
 │   ├── CONVENCIONES.md            # ramas, flujo y convención de commits del equipo
@@ -281,10 +312,32 @@ También en `constants.js`: `ROLES` (`admin`, `encargado`, `usuario`), `TIPOS_FI
 ## 10. Pruebas
 
 ```bash
-npm test          # prueba de humo del flujo completo (Fase 8)
+npm test                    # prueba de humo del flujo completo (Fase 8)
+npm run test:persistencia   # prueba de persistencia: los cambios VISTOS en la base
 ```
 
-`tests/smoke.test.js` arranca su propio servidor en el puerto `3100` (si ya hay uno en esa base, lo aprovecha), entra con el admin y recorre **todo el ciclo de vida**:
+### Prueba de persistencia (cambios reflejados en la base)
+
+`tests/persistencia.test.js` está pensada para **ver** lo que guarda el backend: después de cada paso importante lee el documento **directamente de MongoDB Atlas** y lo imprime en pantalla en formato `ANTES → DESPUÉS`:
+
+| Paso | Qué se muestra en pantalla |
+|---|---|
+| 1. Usuario | El password guardado como **hash bcrypt de 60 caracteres** (nunca el texto plano) y que la API no lo devuelve |
+| 2. Auditorías | El registro `antes/despues` del alta, **sin** el password |
+| 3. Campo `activo` | La transición `true → false` en el mismo `_id` (sin borrar nada) y el `401` al intentar loguearse suspendido |
+| 4. Validaciones | Un nombre de 121 caracteres y un rol fuera del enum → `400` y `countDocuments = 0` (nada llegó a la base) |
+| 5. Borrado lógico | El cliente con `eliminado/eliminadoPor/fechaEliminacion` **siguiendo existiendo** en la colección |
+| 6. Consecutivos | La secuencia `muestras-2026` subiendo de `1 → 2` y la muestra con `codigo`/`codigoSeguimiento` |
+| 7. Motivos | El documento `cambiofechas` con `motivo` (interno) y `motivoPublico` **juntos en la base**, y la API pública devolviendo **solo** `motivoPublico` |
+| 8. Auditorías | La bitácora creciendo (p. ej. `579 → 608`) con los últimos `antes/despues` |
+| 9. Índices | Los índices **únicos** reales de `usuarios`, `muestras` y `cotizacions` listados desde la base |
+
+- Usa el contenedor Docker de `:3200` si está levantado; si no, `BASE=...` o un servidor propio en `3100`.
+- Datos marcados con `PRUEBA PERSISTENCIA <timestamp>` y **limpieza al terminar** (también si falla a mitad). Sale con código `0`/`1`.
+
+### Prueba de humo
+
+`tests/smoke.test.js` arranca su propio servidor en el puerto `3100` (si ya hay uno en esa base, lo aprovecha; con `BASE=http://localhost:3200` usa el contenedor Docker), entra con el admin y recorre **todo el ciclo de vida**:
 
 cliente → solicitud → cotización → aceptación → pago simulado → recepción bloqueada sin pago → pago confirmado → ingreso de la muestra → código y códigoSeguimiento → parámetros → inicio/validación de análisis → resultados → cierre (7 días hábiles) → informe → informe disponible → factura simulada → consulta pública (`< 2 s`, sin fugas de campos internos) → encuesta y respuesta única.
 
