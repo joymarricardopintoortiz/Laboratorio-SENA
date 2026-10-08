@@ -6,6 +6,9 @@ import { Usuario } from '../modules/usuarios/usuarios.model.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
 export const auth = asyncHandler(async (req, res, next) => {
+  // Idempotente: si el guardia de /api/interno ya autenticó, no se repite.
+  if (req.usuario) return next();
+
   const header = req.headers.authorization || '';
   const [tipo, token] = header.split(' ');
 

@@ -22,5 +22,7 @@ const eventoSchema = new mongoose.Schema(
 
 // Índices para la consulta pública: eventos de una muestra visibles al cliente.
 eventoSchema.index({ muestraId: 1, visibleCliente: 1, fecha: 1 });
+// Historial interno de la muestra: todos los eventos ordenados por fecha.
+eventoSchema.index({ muestraId: 1, fecha: 1 });
 
 export const EventoTrazabilidad = mongoose.model('EventoTrazabilidad', eventoSchema);

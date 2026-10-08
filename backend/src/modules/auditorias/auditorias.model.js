@@ -22,4 +22,8 @@ auditoriaSchema.pre('deleteOne', function () {
   throw new Error('Las auditorias no se pueden borrar');
 });
 
+// Índices: auditorías de una entidad concreta y orden cronológico (append-only).
+auditoriaSchema.index({ entidad: 1, entidadId: 1, createdAt: -1 });
+auditoriaSchema.index({ createdAt: -1 });
+
 export const Auditoria = mongoose.model('Auditoria', auditoriaSchema);

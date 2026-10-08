@@ -34,6 +34,8 @@ const facturaSchema = new mongoose.Schema(
 // Índices exigidos: {solicitudId:1} y número único.
 facturaSchema.index({ solicitudId: 1 });
 facturaSchema.index({ pagoId: 1 });
+// Listado interno de facturas por estado con fecha de generación.
+facturaSchema.index({ estado: 1, fechaGeneracion: -1 });
 
 facturaSchema.plugin(softDeletePlugin);
 

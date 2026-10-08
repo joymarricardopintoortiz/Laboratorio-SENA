@@ -20,6 +20,10 @@ const solicitudSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Índices para las consultas frecuentes: listados por estado con fecha y por cliente.
+solicitudSchema.index({ estado: 1, createdAt: -1 });
+solicitudSchema.index({ cliente: 1 });
+
 solicitudSchema.plugin(softDeletePlugin);
 
 export const Solicitud = mongoose.model('Solicitud', solicitudSchema);

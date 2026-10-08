@@ -46,6 +46,9 @@ muestraSchema.index({ codigo: 1 }, { unique: true, sparse: true });
 muestraSchema.index({ codigoSeguimiento: 1 }, { unique: true, sparse: true });
 muestraSchema.index({ estado: 1, fechaRecepcion: -1 });
 muestraSchema.index({ solicitudId: 1 });
+// Listado de muestras por cliente y pendientes de disposición (RF-091).
+muestraSchema.index({ clienteId: 1 });
+muestraSchema.index({ pendienteDisposicion: 1, fechaLimiteConservacion: 1 });
 
 muestraSchema.plugin(softDeletePlugin);
 

@@ -25,6 +25,8 @@ const informeSchema = new mongoose.Schema(
 
 // Índices exigidos.
 informeSchema.index({ muestraId: 1, version: -1 });
+// Listado interno de informes por estado con fecha de generación.
+informeSchema.index({ estado: 1, fechaGeneracion: -1 });
 
 informeSchema.plugin(softDeletePlugin);
 

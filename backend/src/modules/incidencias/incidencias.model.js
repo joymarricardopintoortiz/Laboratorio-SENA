@@ -36,6 +36,8 @@ const incidenciaSchema = new mongoose.Schema(
 incidenciaSchema.index({ muestraId: 1, estado: 1 });
 // Consulta pública: incidencias de la muestra visibles al cliente.
 incidenciaSchema.index({ muestraId: 1, visibleCliente: 1, fechaCreacion: 1 });
+// Listado interno de incidencias por estado con fecha de creación.
+incidenciaSchema.index({ estado: 1, fechaCreacion: -1 });
 
 incidenciaSchema.plugin(softDeletePlugin);
 

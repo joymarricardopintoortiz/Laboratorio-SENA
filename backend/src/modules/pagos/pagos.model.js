@@ -15,6 +15,12 @@ const pagoSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Índices para las consultas frecuentes: pagos de una solicitud o cotización
+// y listado por estado con fecha.
+pagoSchema.index({ solicitud: 1 });
+pagoSchema.index({ cotizacion: 1 });
+pagoSchema.index({ estado: 1, createdAt: -1 });
+
 pagoSchema.plugin(softDeletePlugin);
 
 export const Pago = mongoose.model('Pago', pagoSchema);

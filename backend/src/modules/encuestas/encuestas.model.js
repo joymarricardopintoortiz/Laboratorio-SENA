@@ -30,6 +30,8 @@ const encuestaSchema = new mongoose.Schema(
 
 // Índices: {muestraId:1} y token único.
 encuestaSchema.index({ muestraId: 1 });
+// Listado interno de encuestas por estado con fecha.
+encuestaSchema.index({ estado: 1, createdAt: -1 });
 
 encuestaSchema.plugin(softDeletePlugin);
 

@@ -1,5 +1,6 @@
 // Rutas internas /api/interno/* (Fase 1+: exigirán JWT y roles).
 import { Router } from 'express';
+import { auth } from '../middlewares/auth.js';
 import authRoutes from '../modules/auth/auth.routes.js';
 import clientesRoutes from '../modules/clientes/clientes.routes.js';
 import solicitudesRoutes from '../modules/solicitudes/solicitudes.routes.js';
@@ -16,6 +17,15 @@ import encuestasRoutes from '../modules/encuestas/encuestas.routes.js';
 import facturasRoutes from '../modules/facturas/facturas.routes.js';
 
 const router = Router();
+
+// NINGUNA ruta de /api/interno queda sin autenticación (RNF-003): este guardia
+// corre ANTES de montar los módulos, así que aunque un módulo se olvide de
+// declarar `router.use(auth)` la petición igual exige JWT. El único punto que
+// entra sin token es el login.
+const esLogin = (req) =>
+  req.method === 'POST' && req.originalUrl.split('?')[0] === '/api/interno/auth/login';
+
+router.use((req, res, next) => (esLogin(req) ? next() : auth(req, res, next)));
 
 // Auth: login público; perfil requiere JWT.
 router.use('/auth', authRoutes);

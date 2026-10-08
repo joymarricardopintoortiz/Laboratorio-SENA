@@ -31,6 +31,11 @@ const cotizacionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Índices para las consultas frecuentes: cotizaciones de una solicitud
+// y listado por estado con fecha.
+cotizacionSchema.index({ solicitud: 1 });
+cotizacionSchema.index({ estado: 1, createdAt: -1 });
+
 cotizacionSchema.plugin(softDeletePlugin);
 
 export const Cotizacion = mongoose.model('Cotizacion', cotizacionSchema);
