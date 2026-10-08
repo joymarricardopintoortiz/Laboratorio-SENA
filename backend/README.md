@@ -136,6 +136,8 @@ backend/
 ├── docs/
 │   ├── PLAN_BACKEND_OPENCODE.md   # plan de fases del backend
 │   ├── CONVENCIONES.md            # ramas, flujo y convención de commits del equipo
+│   ├── CREACION_TABLAS.md         # modelo relacional: 25 tablas, tipos y cardinalidades
+│   ├── MODELO_MONGO.md            # modelo final MongoDB: 19 colecciones como se persisten en Atlas
 │   └── api.md                     # documentación de todos los endpoints (96 rutas)
 ├── scripts/
 │   ├── seed.js                # admin inicial + catálogo de parámetros de análisis
@@ -328,6 +330,7 @@ La guía completa (formato de commits con ejemplos, aprobaciones, versionado `vX
 
 - [`docs/CONVENCIONES.md`](docs/CONVENCIONES.md) — ramas, flujo de trabajo, convención de commits, versionado y entornos.
 - [`docs/CREACION_TABLAS.md`](docs/CREACION_TABLAS.md) — modelo de datos: creación de las 25 tablas, tipos de datos, relaciones y cardinalidades.
-- [`docs/PLAN_BACKEND_OPENCODE.md`](docs/PLAN_BACKEND_OPENCODE.md) — plan completo: decisiones, estructura, fases 0–8 y prompts por fase.
+- [`docs/MODELO_MONGO.md`](docs/MODELO_MONGO.md) — modelo final de MongoDB Atlas: las 19 colecciones con tipos, índices, restricciones y documento de ejemplo (ciclo de vida: activar/desactivar y borrado lógico, nunca borrado físico).
+- [`docs/PLAN_BACKEND_OPENCODE.md`](docs/PLAN_BACKEND_OPENCODE.md) — plan completo: decisiones, estructura, fases 0–9 y prompts por fase.
 - `docs/api.md` — documentación de todos los endpoints (módulo por módulo, con método, ruta, rol requerido, cuerpo y respuesta).
 - [`AGENTS.md`](AGENTS.md) — reglas obligatorias de desarrollo del proyecto.
