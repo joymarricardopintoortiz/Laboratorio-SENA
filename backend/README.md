@@ -327,6 +327,7 @@ La guía completa (formato de commits con ejemplos, aprobaciones, versionado `vX
 ## 13. Documentación relacionada
 
 - [`docs/CONVENCIONES.md`](docs/CONVENCIONES.md) — ramas, flujo de trabajo, convención de commits, versionado y entornos.
+- [`docs/CREACION_TABLAS.md`](docs/CREACION_TABLAS.md) — modelo de datos: creación de las 25 tablas, tipos de datos, relaciones y cardinalidades.
 - [`docs/PLAN_BACKEND_OPENCODE.md`](docs/PLAN_BACKEND_OPENCODE.md) — plan completo: decisiones, estructura, fases 0–8 y prompts por fase.
 - `docs/api.md` — documentación de todos los endpoints (módulo por módulo, con método, ruta, rol requerido, cuerpo y respuesta).
 - [`AGENTS.md`](AGENTS.md) — reglas obligatorias de desarrollo del proyecto.
