@@ -3,13 +3,14 @@ import mongoose from 'mongoose';
 
 const auditoriaSchema = new mongoose.Schema(
   {
-    entidad: { type: String, required: true },       // ej: 'muestras', 'clientes'
-    entidadId: { type: String, default: null },
-    accion: { type: String, required: true },        // crear, actualizar, eliminar_logico...
+    // Longitudes según docs/CREACION_TABLAS.md (VARCHAR 50/30/30/150/45).
+    entidad: { type: String, required: true, maxlength: 50 },   // ej: 'muestras', 'clientes'
+    entidadId: { type: String, default: null, maxlength: 30 },
+    accion: { type: String, required: true, maxlength: 30 },    // crear, actualizar, eliminar_logico...
     antes: { type: Object, default: null },
     despues: { type: Object, default: null },
-    usuario: { type: String, default: null },        // usuario que hizo el cambio
-    ip: { type: String, default: null },
+    usuario: { type: String, default: null, maxlength: 150 },   // usuario que hizo el cambio
+    ip: { type: String, default: null, maxlength: 45 },         // IPv4 o IPv6
   },
   { timestamps: true }
 );

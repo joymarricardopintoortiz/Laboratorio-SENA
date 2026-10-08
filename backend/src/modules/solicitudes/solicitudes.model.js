@@ -9,7 +9,7 @@ const solicitudSchema = new mongoose.Schema(
     descripcion: { type: String, default: '' },
     prioridad: { type: String, enum: ['baja', 'media', 'alta'], default: 'media' },
     atencionInmediata: { type: Boolean, default: false },
-    motivoAtencionInmediata: { type: String, default: '' }, // obligatorio si atención inmediata
+    motivoAtencionInmediata: { type: String, default: '', maxlength: 300 }, // obligatorio si atención inmediata
     estado: {
       type: String,
       enum: ['pendiente', 'cotizada', 'aceptada', 'pagada', 'rechazada'],

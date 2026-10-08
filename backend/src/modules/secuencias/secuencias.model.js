@@ -2,7 +2,7 @@
 import mongoose from 'mongoose';
 
 const secuenciaSchema = new mongoose.Schema({
-  _id: { type: String, required: true }, // ej: 'cotizaciones', 'muestras-2026'
+  _id: { type: String, required: true, maxlength: 30 }, // ej: 'cotizaciones', 'muestras-2026'
   secuencia: { type: Number, default: 0 },
 });
 

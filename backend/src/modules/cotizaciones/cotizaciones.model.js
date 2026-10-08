@@ -5,7 +5,7 @@ import { softDeletePlugin } from '../../utils/softDelete.plugin.js';
 const itemSchema = new mongoose.Schema(
   {
     parametro: { type: mongoose.Schema.Types.ObjectId, ref: 'ParametroAnalisis', required: true },
-    descripcion: { type: String, default: '' },
+    descripcion: { type: String, default: '', maxlength: 200 },
     cantidad: { type: Number, required: true, min: 1 },
     precioUnitario: { type: Number, required: true, min: 0 },
     subtotal: { type: Number, required: true, min: 0 },
@@ -26,7 +26,7 @@ const cotizacionSchema = new mongoose.Schema(
       default: 'borrador',
     },
     enviadaPorCorreo: { type: Boolean, default: false },
-    errorCorreo: { type: String, default: '' },
+    errorCorreo: { type: String, default: '', maxlength: 300 },
   },
   { timestamps: true }
 );

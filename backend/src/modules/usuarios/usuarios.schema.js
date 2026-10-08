@@ -10,7 +10,7 @@ const permisosSchema = z.object({
 // POST /api/interno/usuarios — crear usuario interno.
 export const crearUsuarioSchema = z.object({
   nombre: z.string().trim().min(1, 'El nombre es obligatorio').max(120, 'El nombre no puede superar los 120 caracteres'),
-  email: z.string().trim().email('Correo inválido').toLowerCase(),
+  email: z.string().trim().email('Correo inválido').max(150, 'El correo no puede superar los 150 caracteres').toLowerCase(),
   password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres').max(100, 'La contraseña no puede superar los 100 caracteres'),
   rol: z.enum(ROLES, { message: `El rol debe ser uno de: ${ROLES.join(', ')}` }),
   permisos: permisosSchema.optional(),

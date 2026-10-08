@@ -9,11 +9,11 @@ const disposicionSchema = new mongoose.Schema(
   {
     muestraId: { type: mongoose.Schema.Types.ObjectId, ref: 'Muestra', required: true },
     tipo: { type: String, enum: TIPOS_DISPOSICION, required: true },
-    motivo: { type: String, required: true, trim: true },
+    motivo: { type: String, required: true, trim: true, maxlength: 500 },
     observacion: { type: String, default: '' },
     fechaSalida: { type: Date, default: Date.now },
     notificacionCliente: { type: Boolean, default: false },
-    realizadaPor: { type: String, default: null },
+    realizadaPor: { type: String, default: null, maxlength: 150 },
     fechaCreacion: { type: Date, default: Date.now },
   },
   { timestamps: true }

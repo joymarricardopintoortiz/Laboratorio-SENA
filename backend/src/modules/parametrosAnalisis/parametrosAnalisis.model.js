@@ -4,10 +4,11 @@ import { softDeletePlugin } from '../../utils/softDelete.plugin.js';
 
 const parametroSchema = new mongoose.Schema(
   {
-    nombre: { type: String, required: true, unique: true, trim: true },
+    // Longitudes según docs/CREACION_TABLAS.md: nombre VARCHAR(100), unidad VARCHAR(20).
+    nombre: { type: String, required: true, unique: true, trim: true, maxlength: 100 },
     descripcion: { type: String, default: '' },
     precio: { type: Number, required: true, min: 0 },
-    unidad: { type: String, default: '' },
+    unidad: { type: String, default: '', maxlength: 20 },
     activo: { type: Boolean, default: true },
   },
   { timestamps: true }

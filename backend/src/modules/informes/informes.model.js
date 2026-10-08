@@ -9,14 +9,14 @@ export const ESTADOS_INFORME = ['borrador', 'generado', 'disponible', 'enviado']
 const informeSchema = new mongoose.Schema(
   {
     muestraId: { type: mongoose.Schema.Types.ObjectId, ref: 'Muestra', required: true },
-    numeroInforme: { type: String, required: true, unique: true }, // 0001-2026
+    numeroInforme: { type: String, required: true, unique: true, maxlength: 9 }, // 0001-2026
     estado: { type: String, enum: ESTADOS_INFORME, default: 'borrador' },
     // PDF (Buffer). select:false: hay que pedirlo explícitamente con +archivo.
     archivo: { type: Buffer, required: true, select: false },
     // Regenerar crea una versión nueva y conserva la anterior (historial).
     version: { type: Number, default: 1 },
     regeneradoDe: { type: mongoose.Schema.Types.ObjectId, ref: 'Informe', default: null },
-    generadoPor: { type: String, default: null },
+    generadoPor: { type: String, default: null, maxlength: 150 },
     fechaGeneracion: { type: Date, default: Date.now },
     fechaDisponibilidad: { type: Date, default: null },
   },
