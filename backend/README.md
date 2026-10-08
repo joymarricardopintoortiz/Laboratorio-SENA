@@ -135,6 +135,7 @@ backend/
 │   └── smoke.test.js          # prueba de humo del flujo completo (npm test)
 ├── docs/
 │   ├── PLAN_BACKEND_OPENCODE.md   # plan de fases del backend
+│   ├── CONVENCIONES.md            # ramas, flujo y convención de commits del equipo
 │   └── api.md                     # documentación de todos los endpoints (96 rutas)
 ├── scripts/
 │   ├── seed.js                # admin inicial + catálogo de parámetros de análisis
@@ -309,8 +310,23 @@ cliente → solicitud → cotización → aceptación → pago simulado → rece
 - **Contraseñas** hasheadas con bcrypt; la API pública jamás expone observaciones internas ni campos sensibles.
 - **Verificación repetible**: `npm run security` ejecuta 35 comprobaciones automáticas sobre estas reglas y sale con código distinto de `0` si algo falla.
 
-## 12. Documentación relacionada
+## 12. Trabajo en equipo (ramas y commits)
 
+El equipo trabaja con **tres ramas** y **Convención de Commits** (mensajes en español, formato `tipo(alcance): asunto`):
+
+| Rama | Uso |
+|---|---|
+| `master` | Producción: lo que está desplegado y en funcionamiento. Solo avanza con un PR aprobado desde `QA`. |
+| `QA` | Pruebas e integración (entorno de staging). Recibe PRs desde `developer`. |
+| `developer` | Desarrollo diario; todo nace acá (idealmente en `feature/<nombre>` o `fix/<nombre>`). |
+
+Flujo: `feature/*` → **developer** → **QA** (probar) → **master** (producción). Arreglos urgentes: `hotfix/*` desde `master`, y luego se propagan a `QA` y `developer`.
+
+La guía completa (formato de commits con ejemplos, aprobaciones, versionado `vX.Y.Z`, entornos y despliegue) está en [`docs/CONVENCIONES.md`](docs/CONVENCIONES.md).
+
+## 13. Documentación relacionada
+
+- [`docs/CONVENCIONES.md`](docs/CONVENCIONES.md) — ramas, flujo de trabajo, convención de commits, versionado y entornos.
 - [`docs/PLAN_BACKEND_OPENCODE.md`](docs/PLAN_BACKEND_OPENCODE.md) — plan completo: decisiones, estructura, fases 0–8 y prompts por fase.
 - `docs/api.md` — documentación de todos los endpoints (módulo por módulo, con método, ruta, rol requerido, cuerpo y respuesta).
 - [`AGENTS.md`](AGENTS.md) — reglas obligatorias de desarrollo del proyecto.
