@@ -6,9 +6,9 @@ import { z } from 'zod';
 // `documentoId` por `entidadId` y `usuarioId` por `usuario` (email o id).
 export const listarAuditoriasSchema = z
   .object({
-    coleccion: z.string().trim().min(1, 'El filtro coleccion no puede estar vacío').optional(),
-    documentoId: z.string().trim().min(1, 'El filtro documentoId no puede estar vacío').optional(),
-    usuarioId: z.string().trim().min(1, 'El filtro usuarioId no puede estar vacío').optional(),
+    coleccion: z.string().trim().min(1, 'El filtro coleccion no puede estar vacío').max(50, 'El filtro coleccion no puede superar los 50 caracteres').optional(),
+    documentoId: z.string().trim().min(1, 'El filtro documentoId no puede estar vacío').max(30, 'El filtro documentoId no puede superar los 30 caracteres').optional(),
+    usuarioId: z.string().trim().min(1, 'El filtro usuarioId no puede estar vacío').max(150, 'El filtro usuarioId no puede superar los 150 caracteres').optional(),
     desde: z.coerce.date({ error: 'El filtro desde debe ser una fecha válida (ISO)' }).optional(),
     hasta: z.coerce.date({ error: 'El filtro hasta debe ser una fecha válida (ISO)' }).optional(),
     pagina: z.coerce.number({ error: 'El filtro pagina debe ser un número' }).int().positive().default(1),

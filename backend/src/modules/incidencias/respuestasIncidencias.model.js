@@ -4,8 +4,8 @@ import { softDeletePlugin } from '../../utils/softDelete.plugin.js';
 
 const archivoSchema = new mongoose.Schema(
   {
-    nombre: { type: String, required: true },
-    tipoMime: { type: String, required: true },
+    nombre: { type: String, required: true, maxlength: 200 },
+    tipoMime: { type: String, required: true, maxlength: 100 },
     tamano: { type: Number, required: true },
     contenido: { type: Buffer, required: true, select: false }, // no viaja en cada consulta
   },
@@ -16,7 +16,7 @@ const respuestaSchema = new mongoose.Schema(
   {
     incidenciaId: { type: mongoose.Schema.Types.ObjectId, ref: 'Incidencia', required: true, index: true },
     tipoUsuario: { type: String, enum: ['cliente', 'interno'], required: true },
-    usuarioId: { type: String, default: null },
+    usuarioId: { type: String, default: null, maxlength: 150 },
     mensaje: { type: String, default: '' },
     archivos: { type: [archivoSchema], default: [] },
     fecha: { type: Date, default: Date.now },

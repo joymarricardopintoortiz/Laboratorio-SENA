@@ -8,7 +8,7 @@ export const crearSolicitudSchema = z
     descripcion: z.string().optional(),
     prioridad: z.enum(['baja', 'media', 'alta']).optional(),
     atencionInmediata: z.boolean().optional(),
-    motivoAtencionInmediata: z.string().optional(),
+    motivoAtencionInmediata: z.string().max(300, 'El motivo no puede superar los 300 caracteres').optional(),
   })
   .refine((d) => !d.atencionInmediata || (d.motivoAtencionInmediata && d.motivoAtencionInmediata.trim().length > 0), {
     message: 'El motivo es obligatorio cuando hay atención inmediata',

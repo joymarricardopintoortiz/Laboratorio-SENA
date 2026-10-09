@@ -8,7 +8,7 @@ export const ESTADOS_FACTURA = ['pendiente', 'generada', 'enviada', 'anulada', '
 const historialEstadoSchema = new mongoose.Schema(
   {
     estado: { type: String, enum: ESTADOS_FACTURA, required: true },
-    usuario: { type: String, default: null },
+    usuario: { type: String, default: null, maxlength: 150 },
     fecha: { type: Date, default: Date.now },
     motivo: { type: String, default: '' },
   },
@@ -19,12 +19,12 @@ const facturaSchema = new mongoose.Schema(
   {
     solicitudId: { type: mongoose.Schema.Types.ObjectId, ref: 'Solicitud', required: true },
     pagoId: { type: mongoose.Schema.Types.ObjectId, ref: 'Pago', required: true },
-    numero: { type: String, required: true, unique: true }, // 0001-2026
+    numero: { type: String, required: true, unique: true, maxlength: 9 }, // 0001-2026
     valorTotal: { type: Number, required: true, min: 0 },
     estado: { type: String, enum: ESTADOS_FACTURA, default: 'pendiente' },
     // Respuesta del proveedor (Factus sandbox o simulado). select:false en consultas públicas.
     documento: { type: mongoose.Schema.Types.Mixed, default: null },
-    generadaPor: { type: String, default: null },
+    generadaPor: { type: String, default: null, maxlength: 150 },
     fechaGeneracion: { type: Date, default: null },
     historialEstados: { type: [historialEstadoSchema], default: [] },
   },

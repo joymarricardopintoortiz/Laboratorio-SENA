@@ -6,9 +6,10 @@ const pagoSchema = new mongoose.Schema(
   {
     cotizacion: { type: mongoose.Schema.Types.ObjectId, ref: 'Cotizacion', required: true },
     solicitud: { type: mongoose.Schema.Types.ObjectId, ref: 'Solicitud', required: true },
-    referencia: { type: String, required: true, unique: true },
+    // Longitudes según docs/CREACION_TABLAS.md: referencia CHAR(30), metodo VARCHAR(20).
+    referencia: { type: String, required: true, unique: true, maxlength: 30 },
     monto: { type: Number, required: true, min: 0 },
-    metodo: { type: String, default: 'simulado' },
+    metodo: { type: String, default: 'simulado', maxlength: 20 },
     estado: { type: String, enum: ['pendiente', 'confirmado', 'fallido'], default: 'pendiente' },
     fechaConfirmacion: { type: Date, default: null },
   },

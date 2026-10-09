@@ -17,6 +17,9 @@ const envSchema = z.object({
   MAIL_USER: z.string().optional().default(''),
   MAIL_APP_PASSWORD: z.string().optional().default(''),
   MAIL_FROM: z.string().optional().default(''),
+  // Máximo de correos por día calendario (hora de Bogotá). Los avisos de
+  // muestra que sobrepasan el límite quedan pendientes y salen al día siguiente.
+  MAIL_LIMITE_DIA: z.coerce.number().int().positive().default(10),
   MAX_FILE_MB: z.coerce.number().int().positive().default(5),
   // URL pública (frontend) para armar los enlaces de la encuesta y del informe.
   FRONTEND_URL: z.string().optional().default(''),

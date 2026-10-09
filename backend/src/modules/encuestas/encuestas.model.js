@@ -8,7 +8,7 @@ const respuestaSchema = new mongoose.Schema(
   {
     pregunta: { type: String, required: true, trim: true },
     calificacion: { type: Number, required: true, min: 1, max: 5 },
-    comentario: { type: String, default: '' },
+    comentario: { type: String, default: '', maxlength: 500 },
   },
   { _id: false }
 );
@@ -18,7 +18,7 @@ const encuestaSchema = new mongoose.Schema(
     muestraId: { type: mongoose.Schema.Types.ObjectId, ref: 'Muestra', required: true },
     clienteId: { type: mongoose.Schema.Types.ObjectId, ref: 'Cliente', required: true },
     // Token aleatorio e impredecible: da acceso público a la encuesta.
-    token: { type: String, required: true, unique: true },
+    token: { type: String, required: true, unique: true, maxlength: 48 },
     preguntas: { type: [String], default: () => [...PREGUNTAS_ENCUESTA] },
     respuestas: { type: [respuestaSchema], default: [] },
     estado: { type: String, enum: ['pendiente', 'respondida'], default: 'pendiente' },

@@ -6,8 +6,9 @@ import { softDeletePlugin } from '../../utils/softDelete.plugin.js';
 
 const usuarioSchema = new mongoose.Schema(
   {
-    nombre: { type: String, required: true, trim: true },
-    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    // Longitudes según docs/CREACION_TABLAS.md: nombre VARCHAR(120), email VARCHAR(150).
+    nombre: { type: String, required: true, trim: true, maxlength: 120 },
+    email: { type: String, required: true, unique: true, lowercase: true, trim: true, maxlength: 150 },
     password: { type: String, required: true, select: false },
     rol: { type: String, enum: ROLES, required: true },
     // Cuenta activa: una cuenta desactivada no puede iniciar sesión (los

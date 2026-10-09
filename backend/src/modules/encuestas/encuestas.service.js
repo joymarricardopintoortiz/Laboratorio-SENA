@@ -75,6 +75,8 @@ export async function crearYEnviarEncuesta({ muestra, cliente }, usuario = 'sist
           `<p><a href="${enlace}">Responder la encuesta</a></p>`,
           `<p style="font-size:12px;color:#666">Código de seguimiento: ${muestra.codigoSeguimiento || 'no disponible'}. Solo puedes responder una vez. Mensaje automático.</p>`,
         ].join(''),
+        // Las encuestas no forman parte del cupo diario de avisos de muestra.
+        respetarCupo: false,
       });
       encuesta.fechaEnvio = new Date();
       await encuesta.save();

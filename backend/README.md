@@ -58,13 +58,39 @@ curl http://localhost:3000/api/health
 { "ok": true, "mensaje": "API funcionando", "baseDatos": "conectada", "uptime": 1.23, "fecha": "2026-01-01T00:00:00.000Z" }
 ```
 
-> Si la base de datos no conecta, el servidor **igual arranca** y `/api/health` informa `"baseDatos": "desconectada"`.
+> Si la base de datos no conecta, el servidor **igual arranca** y `/api/health` informa `"baseDatos": "desconectada"`. El arranque reintenta **3 veces** (con esperas de 2 s y 5 s) y, si aun así falla, queda programada una **reconexión automática cada 30 s** en segundo plano: en cuanto la red o Atlas respondan, `/api/health` pasa a `"conectada"` **sin reiniciar el servidor**.
 
 ### Notas del `seed`
 
 - `npm run seed` lee `ADMIN_NOMBRE`, `ADMIN_EMAIL` y `ADMIN_PASSWORD` del `.env`; si falta el email o la contraseña, se detiene con un mensaje claro.
 - Si el admin ya existe, **no lo duplica**.
 - También siembra un catálogo inicial de parámetros de análisis (pH, turbidez, coliformes, nitratos, DBO5).
+
+### Ejecutar con Docker
+
+El backend se puede empaquetar en una imagen reproducible (Node 22 Alpine) sin instalar nada más que Docker:
+
+```bash
+# 1. Construir la imagen y levantar el contenedor (puerto local 3200 → contenedor 3000)
+docker compose up -d --build
+
+# 2. Comprobar el estado (healthy = conectado a Atlas)
+docker compose ps
+curl http://localhost:3200/api/health
+
+# 3. Logs, detener y reconstruir
+docker compose logs -f backend
+docker compose down
+```
+
+- **Los secretos no entran en la imagen**: el contenedor lee `.env` en tiempo de ejecución (`env_file`), y `.dockerignore` excluye `.env`, `node_modules/`, `docs/`, `tests/` y `backups/`.
+- El `HEALTHCHECK` del `Dockerfile` solo marca el contenedor como `healthy` si `/api/health` responde con `"baseDatos": "conectada"`.
+- Las pruebas se corren desde la máquina host contra el contenedor:
+  ```bash
+  BASE=http://localhost:3200 npm test               # humo (53) contra el contenedor
+  npm run test:persistencia                         # persistencia (usa :3200 si está levantado)
+  ```
+- Sin Compose también sirve: `docker build -t laboratorio-backend . ` y `docker run -d -p 3200:3000 --env-file .env laboratorio-backend`.
 
 ## 4. Variables de entorno
 
@@ -82,6 +108,7 @@ Todas viven en `.env` (copiado de `.env.example`) y se validan con zod en `src/c
 | `MAIL_USER` | Correo de origen | No* |
 | `MAIL_APP_PASSWORD` | Contraseña de aplicación de Gmail | No* |
 | `MAIL_FROM` | Remetiente visible (por ejemplo `"Laboratorio <correo@gmail.com>"`) | No* |
+| `MAIL_LIMITE_DIA` | Máximo de correos **por día calendario (Bogotá)** para los avisos de muestra; lo que sobra sale al día siguiente (por defecto `10`) | No (por defecto `10`) |
 | `MAX_FILE_MB` | Tamaño máximo de cada adjunto en MB (por defecto `5`) | No (por defecto `5`) |
 | `FRONTEND_URL` | URL pública del frontend, para armar enlaces de informe y encuesta | No |
 | `FACTUS_BASE_URL` | URL de Factus. Vacía ⇒ **modo simulado**; producción/DIAN ⇒ rechazada | No |
@@ -92,6 +119,11 @@ Todas viven en `.env` (copiado de `.env.example`) y se validan con zod en `src/c
 | `ADMIN_PASSWORD` | Contraseña del admin inicial | **Sí para `npm run seed`** |
 
 \* El envío de correos solo funciona con `MAIL_HOST`, `MAIL_USER` y `MAIL_APP_PASSWORD` definidos. Si quedan vacíos, `src/services/mail.service.js` usa una cuenta de prueba de **Ethereal** e imprime en consola la URL de vista previa de cada correo.
+
+**Límite diario y validación del destino:**
+
+- **Máximo `MAIL_LIMITE_DIA` (10) correos al día** para los avisos de muestra. El cupo se reserva de forma atómica en la colección `secuencias` con la clave `correos-AAAA-MM-DD`, así que **sobrevive a reinicios**. Lo que no entra queda `pendiente` con `proximaTentativa` a la medianoche siguiente y la cola (`src/services/colaCorreos.service.js`, activa solo en el servidor, revisión cada 30 min) lo retoma en orden de creación en cuanto hay cupo. **Cotizaciones y encuestas no cuentan** dentro del cupo.
+- **Sin rebotes:** antes de enviar se valida el formato del correo y que el dominio tenga registros MX (también se rechaza el MX nulo de `example.com`, RFC 7505); si el SMTP responde 5xx por destinatario inexistente, la notificación queda `fallida` con `reintentable: false` y **no se vuelve a intentar**. Así no se generan los mensajes de "Mail Delivery Subsystem" que ensucian la bandeja.
 
 **Aviso de seguridad:** `.env` está en `.gitignore`. **Nunca** subas credenciales reales (URI de MongoDB, `JWT_SECRET`, contraseñas, credenciales de Factus) a Git, a commits ni a chats; solo existen en `.env.example` valores de ejemplo.
 
@@ -104,7 +136,8 @@ Definidos en `package.json`:
 | `npm run dev` | Arranca el servidor en modo observación con `node --watch src/server.js` (reinicia automáticamente al guardar cambios; no usa nodemon) |
 | `npm start` | Arranca el servidor en modo normal: `node src/server.js` |
 | `npm run seed` | Siembra el admin inicial y el catálogo de parámetros de análisis: `node scripts/seed.js` |
-| `npm test` | **Prueba de humo del flujo completo** (Fase 8): `node tests/smoke.test.js`; arranca su propio servidor en el puerto 3100 si no hay uno, recorre cliente → solicitud → cotización → aceptación → pago → recepción → análisis → resultados → cierre → informe → factura → consulta pública → encuesta y limpia sus datos al terminar (sale con código 1 si algo falla) |
+| `npm test` | **Prueba de humo del flujo completo** (Fase 8): `node tests/smoke.test.js`; arranca su propio servidor en el puerto 3100 si no hay uno, recorre cliente → solicitud → cotización → aceptación → pago → recepción → análisis → resultados → cierre → informe → factura → consulta pública → encuesta y limpia sus datos al terminar (sale con código 1 si algo falla). Acepta `BASE=http://localhost:3200 npm test` para correrla contra el contenedor Docker |
+| `npm run test:persistencia` | **Prueba de persistencia**: `node tests/persistencia.test.js`; ejecuta un flujo por API y **lee los documentos directo de MongoDB para imprimirlos en pantalla ANTES → DESPUÉS** (hash bcrypt, campo activo, borrado lógico, secuencia, motivos, auditorías e índices); usa el contenedor de :3200 si está levantado, si no uno propio en 3100; limpia sus datos al terminar |
 | `npm run backup` | Exporta **todas** las colecciones a JSON (EJSON ligero) en `backups/AAAA-MM-DD_HHmm/` con un `resumen.json` de conteos; omite los Buffer de PDF/adjuntos y registra cuántos bytes dejó fuera (RNF-008): `node scripts/backup.js` |
 | `npm run restore -- <carpeta>` | Restaura un respaldo: `node scripts/restore.js backups/AAAA-MM-DD_HHmm`. Solo inserta o reemplaza por `_id` (nunca borra), pide confirmación `SI` y, si hay choques, `SOBRESCRIBIR`; `--sin-confirmacion` para uso no interactivo |
 | `npm run indexes` | Revisa los índices de las 19 colecciones: elimina duplicados, crea los faltantes y reporta (30 índices exigidos): `node scripts/revisarIndices.js` (`-- --solo` = solo lectura) |
@@ -128,13 +161,20 @@ backend/
 ├── .env.example               # plantilla de variables SIN credenciales reales
 ├── .env                       # variables reales (en .gitignore, nunca se sube)
 ├── .gitignore                 # node_modules/, .env, *.log, coverage/, tests/coverage/
+├── Dockerfile                 # imagen de producción (Node 22 Alpine, npm ci --omit=dev, healthcheck)
+├── .dockerignore              # fuera de la imagen: .env, node_modules, docs, tests, backups
+├── docker-compose.yml         # servicio backend en http://localhost:3200 (env_file: .env)
 ├── package.json               # scripts y dependencias (ES modules)
 ├── package-lock.json
 ├── backups/                   # respaldos JSON: backups/AAAA-MM-DD_HHmm/ (los crea npm run backup; está en .gitignore)
 ├── tests/
-│   └── smoke.test.js          # prueba de humo del flujo completo (npm test)
+│   ├── smoke.test.js          # prueba de humo del flujo completo (npm test)
+│   └── persistencia.test.js   # cambios ANTES/DESPUÉS leídos de la base (npm run test:persistencia)
 ├── docs/
 │   ├── PLAN_BACKEND_OPENCODE.md   # plan de fases del backend
+│   ├── CONVENCIONES.md            # ramas, flujo y convención de commits del equipo
+│   ├── CREACION_TABLAS.md         # modelo relacional: 25 tablas, tipos y cardinalidades
+│   ├── MODELO_MONGO.md            # modelo final MongoDB: 19 colecciones como se persisten en Atlas
 │   └── api.md                     # documentación de todos los endpoints (96 rutas)
 ├── scripts/
 │   ├── seed.js                # admin inicial + catálogo de parámetros de análisis
@@ -278,10 +318,32 @@ También en `constants.js`: `ROLES` (`admin`, `encargado`, `usuario`), `TIPOS_FI
 ## 10. Pruebas
 
 ```bash
-npm test          # prueba de humo del flujo completo (Fase 8)
+npm test                    # prueba de humo del flujo completo (Fase 8)
+npm run test:persistencia   # prueba de persistencia: los cambios VISTOS en la base
 ```
 
-`tests/smoke.test.js` arranca su propio servidor en el puerto `3100` (si ya hay uno en esa base, lo aprovecha), entra con el admin y recorre **todo el ciclo de vida**:
+### Prueba de persistencia (cambios reflejados en la base)
+
+`tests/persistencia.test.js` está pensada para **ver** lo que guarda el backend: después de cada paso importante lee el documento **directamente de MongoDB Atlas** y lo imprime en pantalla en formato `ANTES → DESPUÉS`:
+
+| Paso | Qué se muestra en pantalla |
+|---|---|
+| 1. Usuario | El password guardado como **hash bcrypt de 60 caracteres** (nunca el texto plano) y que la API no lo devuelve |
+| 2. Auditorías | El registro `antes/despues` del alta, **sin** el password |
+| 3. Campo `activo` | La transición `true → false` en el mismo `_id` (sin borrar nada) y el `401` al intentar loguearse suspendido |
+| 4. Validaciones | Un nombre de 121 caracteres y un rol fuera del enum → `400` y `countDocuments = 0` (nada llegó a la base) |
+| 5. Borrado lógico | El cliente con `eliminado/eliminadoPor/fechaEliminacion` **siguiendo existiendo** en la colección |
+| 6. Consecutivos | La secuencia `muestras-2026` subiendo de `1 → 2` y la muestra con `codigo`/`codigoSeguimiento` |
+| 7. Motivos | El documento `cambiofechas` con `motivo` (interno) y `motivoPublico` **juntos en la base**, y la API pública devolviendo **solo** `motivoPublico` |
+| 8. Auditorías | La bitácora creciendo (p. ej. `579 → 608`) con los últimos `antes/despues` |
+| 9. Índices | Los índices **únicos** reales de `usuarios`, `muestras` y `cotizacions` listados desde la base |
+
+- Usa el contenedor Docker de `:3200` si está levantado; si no, `BASE=...` o un servidor propio en `3100`.
+- Datos marcados con `PRUEBA PERSISTENCIA <timestamp>` y **limpieza al terminar** (también si falla a mitad). Sale con código `0`/`1`.
+
+### Prueba de humo
+
+`tests/smoke.test.js` arranca su propio servidor en el puerto `3100` (si ya hay uno en esa base, lo aprovecha; con `BASE=http://localhost:3200` usa el contenedor Docker), entra con el admin y recorre **todo el ciclo de vida**:
 
 cliente → solicitud → cotización → aceptación → pago simulado → recepción bloqueada sin pago → pago confirmado → ingreso de la muestra → código y códigoSeguimiento → parámetros → inicio/validación de análisis → resultados → cierre (7 días hábiles) → informe → informe disponible → factura simulada → consulta pública (`< 2 s`, sin fugas de campos internos) → encuesta y respuesta única.
 
@@ -309,8 +371,25 @@ cliente → solicitud → cotización → aceptación → pago simulado → rece
 - **Contraseñas** hasheadas con bcrypt; la API pública jamás expone observaciones internas ni campos sensibles.
 - **Verificación repetible**: `npm run security` ejecuta 35 comprobaciones automáticas sobre estas reglas y sale con código distinto de `0` si algo falla.
 
-## 12. Documentación relacionada
+## 12. Trabajo en equipo (ramas y commits)
 
-- [`docs/PLAN_BACKEND_OPENCODE.md`](docs/PLAN_BACKEND_OPENCODE.md) — plan completo: decisiones, estructura, fases 0–8 y prompts por fase.
+El equipo trabaja con **tres ramas** y **Convención de Commits** (mensajes en español, formato `tipo(alcance): asunto`):
+
+| Rama | Uso |
+|---|---|
+| `master` | Producción: lo que está desplegado y en funcionamiento. Solo avanza con un PR aprobado desde `QA`. |
+| `QA` | Pruebas e integración (entorno de staging). Recibe PRs desde `developer`. |
+| `developer` | Desarrollo diario; todo nace acá (idealmente en `feature/<nombre>` o `fix/<nombre>`). |
+
+Flujo: `feature/*` → **developer** → **QA** (probar) → **master** (producción). Arreglos urgentes: `hotfix/*` desde `master`, y luego se propagan a `QA` y `developer`.
+
+La guía completa (formato de commits con ejemplos, aprobaciones, versionado `vX.Y.Z`, entornos y despliegue) está en [`docs/CONVENCIONES.md`](docs/CONVENCIONES.md).
+
+## 13. Documentación relacionada
+
+- [`docs/CONVENCIONES.md`](docs/CONVENCIONES.md) — ramas, flujo de trabajo, convención de commits, versionado y entornos.
+- [`docs/CREACION_TABLAS.md`](docs/CREACION_TABLAS.md) — modelo de datos: creación de las 25 tablas, tipos de datos, relaciones y cardinalidades.
+- [`docs/MODELO_MONGO.md`](docs/MODELO_MONGO.md) — modelo final de MongoDB Atlas: las 19 colecciones con tipos, índices, restricciones y documento de ejemplo (ciclo de vida: activar/desactivar y borrado lógico, nunca borrado físico).
+- [`docs/PLAN_BACKEND_OPENCODE.md`](docs/PLAN_BACKEND_OPENCODE.md) — plan completo: decisiones, estructura, fases 0–9 y prompts por fase.
 - `docs/api.md` — documentación de todos los endpoints (módulo por módulo, con método, ruta, rol requerido, cuerpo y respuesta).
 - [`AGENTS.md`](AGENTS.md) — reglas obligatorias de desarrollo del proyecto.

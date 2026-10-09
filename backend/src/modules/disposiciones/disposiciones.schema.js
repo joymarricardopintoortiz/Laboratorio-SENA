@@ -5,7 +5,7 @@ import { TIPOS_DISPOSICION } from './disposiciones.model.js';
 export const crearDisposicionSchema = z.object({
   muestraId: z.string().min(1, 'La muestra es obligatoria'),
   tipo: z.enum(TIPOS_DISPOSICION, { message: 'El tipo debe ser "devolucion" o "desecho"' }),
-  motivo: z.string().trim().min(3, 'El motivo debe tener al menos 3 caracteres'),
+  motivo: z.string().trim().min(3, 'El motivo debe tener al menos 3 caracteres').max(500, 'El motivo no puede superar los 500 caracteres'),
   observacion: z.string().optional(),
   fechaSalida: z.string().datetime({ message: 'fechaSalida debe ser una fecha válida' }).optional(),
   notificacionCliente: z.boolean().optional(),

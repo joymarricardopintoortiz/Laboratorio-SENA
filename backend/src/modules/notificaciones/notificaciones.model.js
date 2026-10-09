@@ -22,13 +22,20 @@ const notificacionSchema = new mongoose.Schema(
     muestraId: { type: mongoose.Schema.Types.ObjectId, ref: 'Muestra', default: null },
     clienteId: { type: mongoose.Schema.Types.ObjectId, ref: 'Cliente', default: null },
     tipo: { type: String, enum: TIPOS_NOTIFICACION, required: true },
-    asunto: { type: String, required: true, trim: true },
+    asunto: { type: String, required: true, trim: true, maxlength: 200 },
     mensaje: { type: String, required: true },
-    correoDestino: { type: String, default: null }, // correo del cliente (puede faltar)
+    correoDestino: { type: String, default: null, maxlength: 150 }, // correo del cliente (puede faltar)
     medio: { type: String, enum: ['correo'], default: 'correo' },
     estado: { type: String, enum: ESTADOS_NOTIFICACION, default: 'pendiente' },
-    intentos: { type: Number, default: 0, min: 0 },
-    errorUltimoIntento: { type: String, default: null },
+    // RF-112: nunca más de 3 intentos de envío.
+    intentos: { type: Number, default: 0, min: 0, max: 3 },
+    errorUltimoIntento: { type: String, default: null, maxlength: 300 },
+    // false = el destino no existe (dominio sin MX o SMTP lo rechazó): ya no se
+    // reintenta, porque cada intento generaría otro rebote en la bandeja.
+    reintentable: { type: Boolean, default: true },
+    // Cuándo puede volver a intentarse. Se usa cuando el envío quedó pospuesto
+    // por el límite diario de correos (MAIL_LIMITE_DIA): sale al día siguiente.
+    proximaTentativa: { type: Date, default: null },
     fechaProgramada: { type: Date, default: Date.now },
     fechaEnvio: { type: Date, default: null },
   },
@@ -37,8 +44,12 @@ const notificacionSchema = new mongoose.Schema(
 
 // Índices para el listado interno con filtros y la consulta por muestra.
 notificacionSchema.index({ estado: 1, tipo: 1 });
+// La cola de correos busca las pendientes vencidas por este índice.
+notificacionSchema.index({ estado: 1, proximaTentativa: 1 });
 notificacionSchema.index({ muestraId: 1, estado: 1 });
 notificacionSchema.index({ muestraId: 1, createdAt: -1 });
+// Índice documentado en CREACION_TABLAS.md: notificaciones de un cliente.
+notificacionSchema.index({ clienteId: 1 });
 
 notificacionSchema.plugin(softDeletePlugin);
 

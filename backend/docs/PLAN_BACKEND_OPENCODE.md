@@ -2,6 +2,7 @@
 
 Stack (RNF-001): Node.js + Express + Mongoose + MongoDB Atlas (M0 gratuito).
 Base: ERS (112 RF, 19 RNF), documento de análisis y modelo MongoDB.
+Modelo de datos final (fase 9): [`docs/CREACION_TABLAS.md`](CREACION_TABLAS.md) (relacional, 25 tablas con tipos y cardinalidades) y [`docs/MODELO_MONGO.md`](MODELO_MONGO.md) (MongoDB: las 19 colecciones como se persisten realmente en Atlas). El código está alineado campo por campo con ambos documentos.
 
 ---
 
@@ -19,10 +20,13 @@ Base: ERS (112 RF, 19 RNF), documento de análisis y modelo MongoDB.
 | Errores | Siempre JSON con mensaje claro, sin páginas de error | RNF-014 |
 | Fecha estimada | Solo fecha, no hora (días hábiles solo para la conservación de 7 días) | Análisis |
 | Atlas | M0 gratis (512 MB, sin respaldos automáticos) | RNF-016 |
+| Modelo de datos | 25 tablas documentadas (`CREACION_TABLAS.md`) persistidas como 19 colecciones (`MODELO_MONGO.md`), con longitudes, enums e índices alineados en el código | Fase 9 |
+| Ciclo de vida de usuarios | CRUD exclusivo del admin; cuentas con `activo` (suspenso reversible) y borrado lógico; nadie se autoelimina ni se auto-desactiva; el password jamás sale en respuestas ni auditorías | RF-049, RF-050, fase 9 |
+| Motivos y trazabilidad al cliente | `motivo` interno jamás se expone; el cliente solo ve `motivoPublico` (cambios de fecha) y eventos con `visibleCliente` | RF-082, RNF-004, fase 9 |
 
-## 2. Cosas que hay que corregir en el modelo antes de programar
+## 2. Cosas que había que corregir en el modelo (✅ RESUELTO — fase 9)
 
-Comparé el modelo MongoDB (imagen 1) con el modelo relacional (imagen 2) y con los RF. Faltan o chocan estas cosas:
+Comparé el modelo MongoDB (imagen 1) con el modelo relacional (imagen 2) y con los RF. Faltaban o chocaban estas cosas:
 
 1. **No hay colección `facturas`** en el modelo Mongo, pero el Módulo 10 (RF-099 a RF-106) la necesita. Está en el diagrama relacional.
 2. **No hay campos de borrado lógico** en el modelo Mongo (RNF-015). En el diagrama relacional existen `ELIMINADO`, `ELIMINADO_POR`, `FECHA_ELIMINACION` en clientes, solicitudes y muestras. Hay que llevarlos a Mongo.
@@ -31,6 +35,8 @@ Comparé el modelo MongoDB (imagen 1) con el modelo relacional (imagen 2) y con 
 5. **Lista de estados de la muestra**: RF-041 solo define 3, pero el flujo necesita más. Usaré por defecto: `ingresada`, `en_proceso`, `en_analisis`, `resultados_validados`, `cerrada`, `rechazada`, `en_almacen`, `devuelta`, `desechada`. Si el equipo prefiere otra lista, se cambia en `constants.js` y listo.
 6. **Encuesta (RF-098)**: no está definido si se responde por enlace público. Por defecto: sí, con un `token` único por encuesta.
 7. En `usuarios`, `permisos` es un objeto. Conviene dejarlo como `{ editar: Boolean, eliminar: Boolean }`.
+
+**Estado final:** las 7 correcciones quedaron implementadas (colección `facturas` creada en la fase 7; borrado lógico con `eliminado`/`eliminadoPor`/`fechaEliminacion` en 14 colecciones; `codigoSeguimiento` con índice único; `fechaLimiteConservacion` y `rotuloImpreso`; los 9 estados de la muestra en `constants.js`; encuesta pública por `token` único; y `permisos` como objeto). Además, la fase 9 fijó el modelo completo en `docs/CREACION_TABLAS.md` y `docs/MODELO_MONGO.md` y alineó el código campo por campo: longitudes (`maxlength` en Mongoose + `.max()` en zod), enums, índices nuevos (análisis único por ejecución; notificaciones por cliente), `motivoPublico`, campo `activo` y límite de 3 intentos de notificación.
 
 ## 3. Estructura de carpetas
 
@@ -45,7 +51,11 @@ backend/
 │   └── backup.js              # exportación JSON de todas las colecciones (RNF-008)
 ├── tests/
 ├── docs/
-│   └── api.md
+│   ├── PLAN_BACKEND_OPENCODE.md   # este plan
+│   ├── CONVENCIONES.md            # ramas, flujo y convención de commits del equipo
+│   ├── CREACION_TABLAS.md         # modelo relacional de referencia (25 tablas)
+│   ├── MODELO_MONGO.md            # modelo final MongoDB (19 colecciones, documento de ejemplo)
+│   └── api.md                     # documentación de los 96 endpoints
 └── src/
     ├── server.js              # arranca: conecta BD y levanta Express
     ├── app.js                 # middlewares globales y montaje de rutas
@@ -121,14 +131,22 @@ Requiere sus credenciales, así que lo hace una persona del equipo:
 ```env
 PORT=3000
 MONGODB_URI=mongodb+srv://USUARIO:CLAVE@CLUSTER.mongodb.net/laboratorio?retryWrites=true&w=majority
-JWT_SECRET=cambiar_por_un_valor_largo_y_aleatorio
+JWT_SECRET=cambiar_por_un_valor_largo_y_aleatorio_de_32_o_mas_caracteres   # mínimo 32 caracteres (valida env.js)
 JWT_EXPIRES_IN=8h
+TRUST_PROXY=                      # "1" detrás de proxy inverso (Render, nginx) para leer la IP real
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
 MAIL_USER=correo_de_pruebas@gmail.com
 MAIL_APP_PASSWORD=contraseña_de_aplicacion_de_gmail
+MAIL_FROM="Laboratorio <correo_de_pruebas@gmail.com>"
 MAX_FILE_MB=5
+FRONTEND_URL=http://localhost:5173
 FACTUS_BASE_URL=
 FACTUS_CLIENT_ID=
 FACTUS_CLIENT_SECRET=
+ADMIN_NOMBRE=Administrador
+ADMIN_EMAIL=admin@sena.edu.co
+ADMIN_PASSWORD=cambiar
 ```
 
 ## 5. Fases
@@ -144,6 +162,8 @@ FACTUS_CLIENT_SECRET=
 | **6** | Módulos 7 y 11: API pública por código y `notificaciones` (correo, reintentos) | RF-075 a RF-085, RF-107 a RF-112, RNF-004, 005, 013 | Consulta pública < 2 s, sin campos internos |
 | **7** | Módulos 8, 9 y 10: `disposiciones` (7 días hábiles), `informes` PDF, `encuestas`, `facturas` con Factus sandbox | RF-086 a RF-106, RNF-017 | PDF generado y enviado; factura sin llamar a la DIAN |
 | **8** | Respaldo, índices finales, pruebas, documentación de la API | RNF-008, 013 | `npm run backup` exporta todo; README completo |
+| **9** | Ajustes finales del modelo de datos y gestión de usuarios: CRUD de usuarios exclusivo del admin (crear, listar, ver, actualizar rol/permisos, activar/desactivar y eliminar lógico — nadie se autoelimina ni se auto-desactiva, el hash nunca se devuelve); campo `activo` (cuenta suspendida sin borrar: bloquea login y token); `motivoPublico` en `cambiosFecha` (el `motivo` interno jamás llega al cliente); rate limit propio en `POST /api/publico` (10 cada 15 min por IP, distinto al de consultas); `GET /api/interno/auditorias` (solo admin, filtros y paginación); `JWT_SECRET` mínimo 32 caracteres y `TRUST_PROXY`; y alineación campo por campo con `docs/CREACION_TABLAS.md` y `docs/MODELO_MONGO.md` (longitudes `maxlength`/zod, enums e índices) | RF-049, RF-050, RF-082, RF-112, RNF-004, 005, 006, 015 | 53 pruebas de humo + 35 de seguridad en verde; 96 rutas; `docs/MODELO_MONGO.md` documenta la forma final de los datos |
+| **10** | Empaquetado en Docker y pruebas de persistencia: `Dockerfile` (Node 22 Alpine, `npm ci --omit=dev`, solo `src/`+`scripts/`, secretos inyectados en runtime, `HEALTHCHECK` contra `/api/health`), `.dockerignore` (sin `.env`, `node_modules`, docs, tests ni backups) y `docker-compose.yml` (contenedor en `http://localhost:3200`); nueva prueba `npm run test:persistencia` que ejecuta un flujo por API y **lee los documentos directo de MongoDB para mostrar los cambios ANTES → DESPUÉS en pantalla** (hash bcrypt, campo `activo`, borrado lógico, secuencia, motivos, auditorías e índices únicos) | RNF-008 (respaldos/entornos), RNF-015, transparencia de datos | Imagen `laboratorio-backend:1.0.0` healthy; humo 53/53 **contra el contenedor**; persistencia 31/31; seguridad 35/35 |
 
 Regla de trabajo: al terminar cada fase, probar, hacer commit y mostrarle el resultado al equipo antes de seguir. Así se evita lo de "ahí nos muestran cómo va quedando" a ciegas.
 
@@ -228,6 +248,19 @@ Ejecuta SOLO la Fase 7 (RF-086 a RF-106, RNF-017): disposiciones (devolución o 
 ### Fase 8
 ```
 Ejecuta SOLO la Fase 8: scripts/backup.js que exporte todas las colecciones a JSON con fecha (RNF-008), revisión de índices, pruebas de los flujos principales, docs/api.md con todos los endpoints y README con instalación y variables de entorno.
+```
+
+### Fase 9 (ejecutada)
+```
+Ejecuta SOLO la Fase 9 (ajustes finales del modelo de datos y gestión de usuarios):
+1. Módulo usuarios (solo admin): crear con email único y password >= 8 (hash bcrypt, jamás devuelto), listar, ver, actualizar rol/permisos, activar/desactivar y eliminar LÓGICO; un admin no puede desactivarse, eliminarse ni quitarse el rol a sí mismo.
+2. Campo activo en usuarios: una cuenta desactivada no inicia sesión (401) y su token deja de valer (401).
+3. cambiosFecha: agregar motivoPublico; /api/publico/seguimiento devuelve solo motivoPublico (cadena vacía si no existe) y NUNCA el motivo interno (ni en trazabilidad ni en correos).
+4. Rate limit propio para POST /api/publico (10 peticiones cada 15 minutos por IP), distinto del de consultas.
+5. GET /api/interno/auditorias (solo admin): filtros coleccion/documentoId/usuarioId/rango de fechas, paginado, solo lectura.
+6. env.js: JWT_SECRET con mínimo 32 caracteres y TRUST_PROXY opcional (app.set('trust proxy', 1)).
+7. Alinea modelos Mongoose y schemas zod campo por campo con docs/CREACION_TABLAS.md y docs/MODELO_MONGO.md: longitudes maxlength/.max(), enums idénticos, índices (análisis unico por ejecución; notificaciones por clienteId) y max 3 intentos de notificación.
+8. Verifica con npm test (53) y npm run security (35); actualiza docs/api.md, README.md y el plan.
 ```
 
 ## 8. Qué pueden y no pueden hacer solos con OpenCode

@@ -7,7 +7,7 @@ export const crearCotizacionSchema = z.object({
     .array(
       z.object({
         parametro: z.string().min(1, 'El parámetro es obligatorio'),
-        descripcion: z.string().optional(),
+        descripcion: z.string().max(200, 'La descripción no puede superar los 200 caracteres').optional(),
         cantidad: z.number().int().min(1, 'La cantidad mínima es 1'),
       })
     )

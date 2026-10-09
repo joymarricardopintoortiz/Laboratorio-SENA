@@ -4,8 +4,8 @@ import { softDeletePlugin } from '../../utils/softDelete.plugin.js';
 
 const accionSchema = new mongoose.Schema(
   {
-    tipo: { type: String, required: true }, // creada, demora_fecha, respuesta_cliente, aprobada, cerrada, observacion
-    usuario: { type: String, default: null },
+    tipo: { type: String, required: true, maxlength: 30 }, // creada, demora_fecha, respuesta_cliente, aprobada, cerrada, observacion
+    usuario: { type: String, default: null, maxlength: 150 },
     fecha: { type: Date, default: Date.now },
     comentario: { type: String, default: '' },
   },
@@ -16,16 +16,16 @@ const incidenciaSchema = new mongoose.Schema(
   {
     muestraId: { type: mongoose.Schema.Types.ObjectId, ref: 'Muestra', required: true },
     tipo: { type: String, enum: ['informativa', 'demora', 'requiere_accion_cliente'], required: true },
-    titulo: { type: String, required: true, trim: true },
+    titulo: { type: String, required: true, trim: true, maxlength: 200 },
     descripcion: { type: String, default: '' },
     observacionesInternas: { type: String, default: '' }, // NUNCA visibles al cliente
     visibleCliente: { type: Boolean, default: false },
     requiereRespuesta: { type: Boolean, default: false },
     estado: { type: String, enum: ['abierta', 'en_revision', 'esperando_cliente', 'aprobada', 'cerrada'], default: 'abierta' },
     nuevaFechaEstimada: { type: Date, default: null }, // solo para demora
-    motivo: { type: String, default: '' }, // motivo de demora / cierre
-    creadaPor: { type: String, default: null },
-    revisadaPor: { type: String, default: null },
+    motivo: { type: String, default: '', maxlength: 500 }, // motivo de demora / cierre
+    creadaPor: { type: String, default: null, maxlength: 150 },
+    revisadaPor: { type: String, default: null, maxlength: 150 },
     fechaCreacion: { type: Date, default: Date.now },
     fechaCierre: { type: Date, default: null },
     acciones: { type: [accionSchema], default: [] },
