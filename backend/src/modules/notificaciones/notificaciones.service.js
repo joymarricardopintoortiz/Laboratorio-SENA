@@ -8,7 +8,8 @@
 import { Notificacion, MAX_INTENTOS } from './notificaciones.model.js';
 import { Muestra } from '../muestras/muestras.model.js';
 import { Cliente } from '../clientes/clientes.model.js';
-import { enviarCorreo } from '../../services/mail.service.js';
+import { enviarCorreo, ERROR_LIMITE, ERROR_DESTINO, proximaMedianocheBogota } from '../../services/mail.service.js';
+import { env } from '../../config/env.js';
 import { registrarEvento } from '../../services/trazabilidad.service.js';
 import { registrarAuditoria } from '../../middlewares/audit.js';
 import { AppError } from '../../utils/AppError.js';
@@ -92,31 +93,67 @@ export async function enviarNotificacion(notificacion, { muestra = null, cliente
   try {
     const muestraDoc = muestra || await buscarMuestra(notificacion.muestraId);
     const clienteDoc = cliente || await cargarCliente(muestraDoc);
-    const correo = clienteDoc?.email?.trim() || null;
 
-    notificacion.intentos = (notificacion.intentos || 0) + 1;
+    // Destino: se usa el correo ACTUAL del cliente si está enlazado; si la
+    // muestra/cliente ya no existe (borrado lógico, aviso sin muestra), se
+    // recurre al correo capturado en la notificación al crearse.
+    const correo = clienteDoc
+      ? clienteDoc.email?.trim() || null
+      : notificacion.correoDestino?.trim() || null;
+
     notificacion.correoDestino = correo;
 
     if (!correo) {
       // RF-110: sin correo la operación continúa; solo queda registrada como fallida.
+      notificacion.intentos = Math.min(MAX_INTENTOS, (notificacion.intentos || 0) + 1);
       notificacion.estado = 'fallida';
       notificacion.errorUltimoIntento = MENSAJE_SIN_CORREO;
+      notificacion.proximaTentativa = null;
     } else {
+      const { texto, html } = cuerpoCorreo({
+        asunto: notificacion.asunto,
+        mensaje: notificacion.mensaje,
+        codigoSeguimiento: muestraDoc?.codigoSeguimiento,
+        codigo: muestraDoc?.codigo,
+        enlace,
+      });
+
+      // Si el destino vuelve a ser válido (p. ej. el cliente corrigió su
+      // correo), la notificación vuelve a ser reintentable.
+      notificacion.reintentable = true;
+      let cuentaComoIntento = true;
+
       try {
-        const { texto, html } = cuerpoCorreo({
-          asunto: notificacion.asunto,
-          mensaje: notificacion.mensaje,
-          codigoSeguimiento: muestraDoc?.codigoSeguimiento,
-          codigo: muestraDoc?.codigo,
-          enlace,
-        });
         await enviarCorreo({ para: correo, asunto: notificacion.asunto, html, texto, adjuntos });
         notificacion.estado = 'enviada';
         notificacion.fechaEnvio = new Date();
         notificacion.errorUltimoIntento = null;
+        notificacion.proximaTentativa = null;
       } catch (error) {
-        notificacion.estado = 'fallida';
-        notificacion.errorUltimoIntento = error?.message || 'Error desconocido al enviar el correo';
+        if (error?.code === ERROR_LIMITE) {
+          // Límite diario alcanzado: NO es un fallo ni consume un intento.
+          // La cola del día siguiente la vuelve a tomar en el mismo orden.
+          cuentaComoIntento = false;
+          notificacion.estado = 'pendiente';
+          notificacion.proximaTentativa = proximaMedianocheBogota();
+          notificacion.errorUltimoIntento =
+            `Límite diario de ${env.MAIL_LIMITE_DIA} correos alcanzado; se enviará mañana.`;
+        } else if (error?.code === ERROR_DESTINO) {
+          // El destino no existe (sin MX o rechazado por el SMTP): no se
+          // reintenta, porque cada intento generaría otro rebote en la bandeja.
+          notificacion.estado = 'fallida';
+          notificacion.reintentable = false;
+          notificacion.proximaTentativa = null;
+          notificacion.errorUltimoIntento = String(error.message || 'Destino de correo inválido').slice(0, 300);
+        } else {
+          notificacion.estado = 'fallida';
+          notificacion.proximaTentativa = null;
+          notificacion.errorUltimoIntento = String(error?.message || 'Error desconocido al enviar el correo').slice(0, 300);
+        }
+      }
+
+      if (cuentaComoIntento) {
+        notificacion.intentos = Math.min(MAX_INTENTOS, (notificacion.intentos || 0) + 1);
       }
     }
 
@@ -321,6 +358,12 @@ export async function reintentar(id, usuario = null) {
   if (!notificacion) throw new AppError('Notificación no encontrada', 404);
   if (notificacion.estado !== 'fallida') {
     throw new AppError('Solo se pueden reintentar notificaciones fallidas', 400);
+  }
+  if (notificacion.reintentable === false) {
+    throw new AppError(
+      'La dirección de correo del cliente no es válida (dominio sin MX o rechazado por el servidor). Corrige el correo del cliente antes de reintentar.',
+      400
+    );
   }
   if ((notificacion.intentos || 0) >= MAX_INTENTOS) {
     throw new AppError(`Se alcanzó el límite de ${MAX_INTENTOS} intentos de envío`, 400);

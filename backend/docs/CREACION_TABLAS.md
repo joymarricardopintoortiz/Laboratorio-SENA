@@ -563,6 +563,8 @@ CREATE TABLE notificaciones (
   estado               ENUM('pendiente','enviada','fallida') NOT NULL DEFAULT 'pendiente',
   intentos             TINYINT UNSIGNED NOT NULL DEFAULT 0,   -- máx. 3
   error_ultimo_intento VARCHAR(300) NULL,
+  reintentable         BOOLEAN NOT NULL DEFAULT TRUE,  -- FALSE = destino inválido, ya no se reintenta
+  proxima_tentativa    DATETIME NULL,                  -- reenvío automático (límite diario de correos)
   fecha_programada     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   fecha_envio          DATETIME NULL,
   eliminado            BOOLEAN NOT NULL DEFAULT FALSE,
@@ -572,6 +574,7 @@ CREATE TABLE notificaciones (
   fecha_actualizacion  DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_notif_muestra (muestra_id),
   INDEX idx_notif_cliente (cliente_id),
+  INDEX idx_notif_cola (estado, proxima_tentativa),    -- cola de reenvío diaria
   CONSTRAINT fk_notif_muestra FOREIGN KEY (muestra_id) REFERENCES muestras(id),
   CONSTRAINT fk_notif_cliente FOREIGN KEY (cliente_id) REFERENCES clientes(id)
 );

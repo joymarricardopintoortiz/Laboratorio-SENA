@@ -58,7 +58,7 @@ curl http://localhost:3000/api/health
 { "ok": true, "mensaje": "API funcionando", "baseDatos": "conectada", "uptime": 1.23, "fecha": "2026-01-01T00:00:00.000Z" }
 ```
 
-> Si la base de datos no conecta, el servidor **igual arranca** y `/api/health` informa `"baseDatos": "desconectada"`.
+> Si la base de datos no conecta, el servidor **igual arranca** y `/api/health` informa `"baseDatos": "desconectada"`. El arranque reintenta **3 veces** (con esperas de 2 s y 5 s) y, si aun así falla, queda programada una **reconexión automática cada 30 s** en segundo plano: en cuanto la red o Atlas respondan, `/api/health` pasa a `"conectada"` **sin reiniciar el servidor**.
 
 ### Notas del `seed`
 
@@ -108,6 +108,7 @@ Todas viven en `.env` (copiado de `.env.example`) y se validan con zod en `src/c
 | `MAIL_USER` | Correo de origen | No* |
 | `MAIL_APP_PASSWORD` | Contraseña de aplicación de Gmail | No* |
 | `MAIL_FROM` | Remetiente visible (por ejemplo `"Laboratorio <correo@gmail.com>"`) | No* |
+| `MAIL_LIMITE_DIA` | Máximo de correos **por día calendario (Bogotá)** para los avisos de muestra; lo que sobra sale al día siguiente (por defecto `10`) | No (por defecto `10`) |
 | `MAX_FILE_MB` | Tamaño máximo de cada adjunto en MB (por defecto `5`) | No (por defecto `5`) |
 | `FRONTEND_URL` | URL pública del frontend, para armar enlaces de informe y encuesta | No |
 | `FACTUS_BASE_URL` | URL de Factus. Vacía ⇒ **modo simulado**; producción/DIAN ⇒ rechazada | No |
@@ -118,6 +119,11 @@ Todas viven en `.env` (copiado de `.env.example`) y se validan con zod en `src/c
 | `ADMIN_PASSWORD` | Contraseña del admin inicial | **Sí para `npm run seed`** |
 
 \* El envío de correos solo funciona con `MAIL_HOST`, `MAIL_USER` y `MAIL_APP_PASSWORD` definidos. Si quedan vacíos, `src/services/mail.service.js` usa una cuenta de prueba de **Ethereal** e imprime en consola la URL de vista previa de cada correo.
+
+**Límite diario y validación del destino:**
+
+- **Máximo `MAIL_LIMITE_DIA` (10) correos al día** para los avisos de muestra. El cupo se reserva de forma atómica en la colección `secuencias` con la clave `correos-AAAA-MM-DD`, así que **sobrevive a reinicios**. Lo que no entra queda `pendiente` con `proximaTentativa` a la medianoche siguiente y la cola (`src/services/colaCorreos.service.js`, activa solo en el servidor, revisión cada 30 min) lo retoma en orden de creación en cuanto hay cupo. **Cotizaciones y encuestas no cuentan** dentro del cupo.
+- **Sin rebotes:** antes de enviar se valida el formato del correo y que el dominio tenga registros MX (también se rechaza el MX nulo de `example.com`, RFC 7505); si el SMTP responde 5xx por destinatario inexistente, la notificación queda `fallida` con `reintentable: false` y **no se vuelve a intentar**. Así no se generan los mensajes de "Mail Delivery Subsystem" que ensucian la bandeja.
 
 **Aviso de seguridad:** `.env` está en `.gitignore`. **Nunca** subas credenciales reales (URI de MongoDB, `JWT_SECRET`, contraseñas, credenciales de Factus) a Git, a commits ni a chats; solo existen en `.env.example` valores de ejemplo.
 

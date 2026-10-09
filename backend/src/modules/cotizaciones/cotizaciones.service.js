@@ -61,6 +61,8 @@ export async function enviar(id, usuario) {
       asunto: `Cotización #${cotizacion.numero} - Laboratorio`,
       html: `<h2>Cotización #${cotizacion.numero}</h2><p>${lineas}</p><b>Total: $${cotizacion.total}</b>`,
       texto: `Cotización #${cotizacion.numero}. Total: $${cotizacion.total}`,
+      // Las cotizaciones no forman parte del cupo diario de avisos de muestra.
+      respetarCupo: false,
     });
     cotizacion.estado = 'enviada';
     cotizacion.enviadaPorCorreo = true;

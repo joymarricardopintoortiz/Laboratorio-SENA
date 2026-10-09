@@ -517,6 +517,7 @@ Documento gemelo de [`CREACION_TABLAS.md`](CREACION_TABLAS.md): mientras ese des
   "mensaje": "El informe de su muestra ya está disponible…",
   "correoDestino": "contacto@agua.com", "medio": "correo",
   "estado": "enviada", "intentos": 1, "errorUltimoIntento": null,
+  "reintentable": true, "proximaTentativa": null,
   "fechaProgramada": ISODate("2026-10-08T15:00:00Z"), "fechaEnvio": ISODate("2026-10-08T15:00:05Z"),
   "eliminado": false, … , "createdAt": …, "updatedAt": …
 }
@@ -528,8 +529,10 @@ Documento gemelo de [`CREACION_TABLAS.md`](CREACION_TABLAS.md): mientras ese des
 | asunto / correoDestino / errorUltimoIntento | String | **max 200 / 150 / 300** |
 | estado | String | enum `pendiente\|enviada\|fallida` |
 | intentos | Number | min 0, **max 3** (RF-112) |
+| reintentable | Boolean | default `true`; `false` = destino inválido (sin MX o rechazado por el SMTP), ya **no** se reintenta |
+| proximaTentativa | Date | default `null`; cuándo puede volver a intentarse (se usa cuando el envío quedó pospuesto por el límite diario de `MAIL_LIMITE_DIA`) |
 
-**Índices:** `{estado, tipo}`, `{muestraId, estado}`, `{muestraId, createdAt:-1}`, `{clienteId}`.
+**Índices:** `{estado, tipo}`, **`{estado, proximaTentativa}`** (cola de correos), `{muestraId, estado}`, `{muestraId, createdAt:-1}`, `{clienteId}`.
 
 ---
 
